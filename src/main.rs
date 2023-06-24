@@ -367,6 +367,13 @@ fn main() {
     let pollfd_main = PollFd::new(&fd_main, PollFlags::POLLIN);
     uinput.set_evbit(EventKind::Key).unwrap();
     let mut layers = mem::take(&mut cfg.layers);
+
+    if width >= 2170 {
+        for layer in &mut layers {
+            layer.buttons.insert(0, Button::new_text("esc".to_string(), Key::Esc));
+        }
+    }
+
     for layer in &layers {
         for button in &layer.buttons {
             uinput.set_keybit(button.action).unwrap();
