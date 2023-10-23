@@ -10,8 +10,8 @@ repository = "https://github.com/WhatAmISupposedToPutHere/tiny-dfr"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cairo-rs = { version = "0.18", default-features = false }
-librsvg = { git = "https://gitlab.gnome.org/WhyHelloThere/librsvg.git", rev = "cb3d568d30207e0512f486a30001effabb80bb04", version = "2.57.0" }
+cairo-rs = { version = "0.17", default-features = false }
+librsvg = { git = "https://github.com/AdityaGarg8/librsvg.git", rev = "9edf39877e09c72b02ee0b32f0064a8e24fba8da", version = "2.56.4" }
 drm = "0.9"
 anyhow = "1"
 input = "0.8"
@@ -25,3 +25,4 @@ toml = "0.7"
 icon-loader = "0.4"
 image = "0.24"
 chrono = "0.4"
+lazy_static = "1.4"

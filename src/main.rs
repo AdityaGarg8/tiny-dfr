@@ -23,6 +23,7 @@ use nix::poll::{poll, PollFd, PollFlags};
 use privdrop::PrivDrop;
 use rsvg::{CairoRenderer, Loader, SvgHandle};
 use serde::Deserialize;
+use lazy_static::lazy_static;
 use std::{
     collections::HashMap,
     fs::{read_to_string, self, File, OpenOptions},
@@ -43,9 +44,11 @@ use display::DrmBackend;
 const BUTTON_COLOR_INACTIVE: f64 = 0.200;
 const BUTTON_COLOR_ACTIVE: f64 = 0.400;
 const TIMEOUT_MS: i32 = 30 * 1000;
+//const CONFIG_PATH: &str = "/home/galder/git/tiny-dfr/etc/tiny-dfr.conf";
+const CONFIG_PATH: &str = "/etc/tiny-dfr.conf";
 
 enum ButtonImage {
-    Text(&'static str),
+    Text(String),
     Svg(SvgHandle),
     Png(DynamicImage),
     Time(u16),
@@ -60,12 +63,12 @@ struct Button {
 }
 
 impl Button {
-    fn new_text(text: &'static str, action: Key) -> Button {
+    fn new_text(text: &str, action: Key) -> Button {
         Button {
             action,
             active: false,
             changed: false,
-            image: ButtonImage::Text(text),
+            image: ButtonImage::Text(text.to_string()),
         }
     }
     fn new_icon(icon_name: &str, action: Key, icon_theme: &str) -> Button {
@@ -107,8 +110,8 @@ impl Button {
                         image = ButtonImage::Png(image::open(icon_path_png).unwrap());
                 } else {
                     // If the icon is not found in /usr/share/pixmaps, use the icon_name as text
-                        let icon_name_label: &'static str = Box::leak(format!("{}", icon_name).into_boxed_str());
-                        image = ButtonImage::Text(icon_name_label);
+                        let icon_name_label = &Box::leak(format!("{}", icon_name).into_boxed_str());
+                        image = ButtonImage::Text(icon_name_label.to_string());
                 }
             }
         };
@@ -470,6 +473,29 @@ where
     );
 }
 
+#[derive(Deserialize)]
+struct ButtonConfig {
+    label: String,
+    key: String,
+    mode: String,
+    #[serde(default)]
+    theme: String,
+}
+
+#[derive(Deserialize)]
+struct LayerButtonsConfig {
+    buttons: Vec<ButtonConfig>,
+}
+
+#[derive(Deserialize)]
+struct LayersConfig {
+    primary_layer_buttons: LayerButtonsConfig,
+    secondary_layer_buttons: LayerButtonsConfig,
+    tertiary_layer_buttons: LayerButtonsConfig,
+    tertiary2_layer_buttons: LayerButtonsConfig,
+    tertiary3_layer_buttons: LayerButtonsConfig,
+}
+
 #[repr(usize)]
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -484,17 +510,8 @@ struct UiConfig {
     primary_layer: LayerType,
     secondary_layer: LayerType,
     font: String,
-    icon_theme: String,
 }
 
-#[derive(Deserialize)]
-struct AppConfig {
-    app_icon_theme: String,
-    app1_icon: String,
-    app2_icon: String,
-    app3_icon: String,
-    app4_icon: String,
-}
 
 #[derive(Deserialize)]
 struct TimeConfig {
@@ -504,8 +521,8 @@ struct TimeConfig {
 #[derive(Deserialize)]
 struct Config {
     ui: UiConfig,
-    apps: AppConfig,
     time: TimeConfig,
+    layers: LayersConfig,
 }
 
 impl Config {
@@ -514,6 +531,7 @@ impl Config {
     }
 }
 
+#[allow(dead_code)]
 fn get_file_modified_time(path: &str) -> Option<SystemTime> {
     fs::metadata(path)
         .ok()
@@ -521,119 +539,81 @@ fn get_file_modified_time(path: &str) -> Option<SystemTime> {
         .flatten()
 }
 
-fn initialize_layers() -> [FunctionLayer; 5] {
-    let config_path = "/etc/tiny-dfr.conf";
-    let config = Config::from_file(config_path).unwrap();
 
-    let primary_layer_buttons = vec![
-        Button::new_text("esc", Key::Esc),
-        Button::new_text("F1", Key::F1),
-        Button::new_text("F2", Key::F2),
-        Button::new_text("F3", Key::F3),
-        Button::new_text("F4", Key::F4),
-        Button::new_text("F5", Key::F5),
-        Button::new_text("F6", Key::F6),
-        Button::new_text("F7", Key::F7),
-        Button::new_text("F8", Key::F8),
-        Button::new_text("F9", Key::F9),
-        Button::new_text("F10", Key::F10),
-        Button::new_text("F11", Key::F11),
-        Button::new_text("F12", Key::F12),
-    ];
 
-    let secondary_layer_buttons = vec![
-        Button::new_text("esc", Key::Esc),
-        Button::new_icon("display-brightness-low-symbolic", Key::BrightnessDown, &config.ui.icon_theme),
-        Button::new_icon("display-brightness-high-symbolic", Key::BrightnessUp, &config.ui.icon_theme),
-        Button::new_icon("microphone-disabled-symbolic", Key::MicMute, &config.ui.icon_theme),
-        Button::new_icon("system-search-symbolic", Key::Search, &config.ui.icon_theme),
-        Button::new_icon("keyboard-brightness-low-symbolic", Key::IllumDown, &config.ui.icon_theme),
-        Button::new_icon("keyboard-brightness-high-symbolic", Key::IllumUp, &config.ui.icon_theme),
-        Button::new_icon("media-seek-backward-symbolic", Key::PreviousSong, &config.ui.icon_theme),
-        Button::new_icon("media-playback-start-symbolic", Key::PlayPause, &config.ui.icon_theme),
-        Button::new_icon("media-seek-forward-symbolic", Key::NextSong, &config.ui.icon_theme),
-        Button::new_icon("audio-volume-muted-symbolic", Key::Mute, &config.ui.icon_theme),
-        Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown, &config.ui.icon_theme),
-        Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp, &config.ui.icon_theme),
-    ];
 
-    let tertiary_layer_buttons = vec![
-        Button::new_text("esc", Key::Esc),
-        Button::new_icon(&config.apps.app1_icon, Key::Prog1, &config.apps.app_icon_theme),
-        Button::new_icon(&config.apps.app2_icon, Key::Prog2, &config.apps.app_icon_theme),
-        Button::new_icon(&config.apps.app3_icon, Key::Prog3, &config.apps.app_icon_theme),
-        Button::new_icon(&config.apps.app4_icon, Key::Prog4, &config.apps.app_icon_theme),
-        Button::new_icon("go-next-symbolic", Key::Macro1, &config.ui.icon_theme),
-        Button::new_time(config.time.use_24_hr),
-        Button::new_blank(),
-        Button::new_blank(),
-        Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown, &config.ui.icon_theme),
-        Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp, &config.ui.icon_theme),
-        Button::new_icon("media-playback-start-symbolic", Key::PlayPause, &config.ui.icon_theme),
-        Button::new_icon("system-search-symbolic", Key::Search, &config.ui.icon_theme),
-        Button::new_icon("go-next-symbolic", Key::Macro3, &config.ui.icon_theme),
-    ];
 
-    let tertiary2_layer_buttons = vec![
-        Button::new_text("esc", Key::Esc),
-        Button::new_icon("go-previous-symbolic", Key::Macro2, &config.ui.icon_theme),
-        Button::new_icon("web-browser-symbolic", Key::WWW, &config.ui.icon_theme),
-        Button::new_icon("accessories-calculator-symbolic", Key::Calc, &config.ui.icon_theme),
-        Button::new_icon("system-file-manager-symbolic", Key::File, &config.ui.icon_theme),
-        Button::new_icon("view-app-grid-symbolic", Key::AllApplications, &config.ui.icon_theme),
-        Button::new_time(config.time.use_24_hr),
-        Button::new_blank(),
-        Button::new_blank(),
-        Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown, &config.ui.icon_theme),
-        Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp, &config.ui.icon_theme),
-        Button::new_icon("media-playback-start-symbolic", Key::PlayPause, &config.ui.icon_theme),
-        Button::new_icon("system-search-symbolic", Key::Search, &config.ui.icon_theme),
-        Button::new_icon("go-next-symbolic", Key::Macro3, &config.ui.icon_theme),
-    ];
+lazy_static! {
+    static ref KEY_MAP: HashMap<String, Key> = {
+        let mut map = HashMap::new();
+        for key in Key::iter() {
+            map.insert(format!("Key::{:?}", key), key);
+        }
+        map
+    };
+}
 
-    let tertiary3_layer_buttons = vec![
-        Button::new_text("esc", Key::Esc),
-        Button::new_icon("go-previous-symbolic", Key::Macro2, &config.ui.icon_theme),
-        Button::new_icon("display-brightness-low-symbolic", Key::BrightnessDown, &config.ui.icon_theme),
-        Button::new_icon("display-brightness-high-symbolic", Key::BrightnessUp, &config.ui.icon_theme),
-        Button::new_icon("microphone-disabled-symbolic", Key::MicMute, &config.ui.icon_theme),
-        Button::new_icon("keyboard-brightness-low-symbolic", Key::IllumDown, &config.ui.icon_theme),
-        Button::new_icon("keyboard-brightness-high-symbolic", Key::IllumUp, &config.ui.icon_theme),
-        Button::new_icon("media-seek-backward-symbolic", Key::PreviousSong, &config.ui.icon_theme),
-        Button::new_icon("media-playback-start-symbolic", Key::PlayPause, &config.ui.icon_theme),
-        Button::new_icon("media-seek-forward-symbolic", Key::NextSong, &config.ui.icon_theme),
-        Button::new_icon("audio-volume-muted-symbolic", Key::Mute, &config.ui.icon_theme),
-        Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown, &config.ui.icon_theme),
-        Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp, &config.ui.icon_theme),
-    ];
+fn build_layer_vectors(buttons: &Vec<ButtonConfig>, config: &Config) -> Vec<Button> {
+    // helper to poputate layers with the given config
+    let mut vector = Vec::new();
+    for button_config in buttons {
+        let label = &button_config.label.as_str();
+        let key = &button_config.key;
+        let theme = &button_config.theme;
+        let mode = button_config.mode.as_str();
+        if mode == "blank" {
+            vector.push(Button::new_blank());
+            continue;
+        } else if mode == "time" {
+            vector.push(Button::new_time(config.time.use_24_hr));
+            continue;
+        }
+     
+        match KEY_MAP.get(key) {
+            Some(value) => {
+                match mode  {
+                    "icon" => vector.push(Button::new_icon(label, *value, theme)),
+                    "text" => vector.push(Button::new_text(label, *value)),
+                    //None => Err(format!("Option {} not found!", mode.unwrap_or(-1)),
+                    _ => println!("Value is something else"),
+                }
+                //println!("Found key {}: with value {:?}", label, value );
+            }
+            None => println!("Could not find {key} in the map.")
+        }
+    }
+    vector
+}
 
+
+
+fn initialize_layers(config: &Config) -> [FunctionLayer; 5] {
     let primary_layer = FunctionLayer {
-        buttons: primary_layer_buttons,
+        buttons: build_layer_vectors(&config.layers.primary_layer_buttons.buttons, &config),
     };
 
     let secondary_layer = FunctionLayer {
-        buttons: secondary_layer_buttons,
+        buttons: build_layer_vectors(&config.layers.secondary_layer_buttons.buttons, &config),
     };
 
     let tertiary_layer = FunctionLayer {
-        buttons: tertiary_layer_buttons,
+        buttons: build_layer_vectors(&config.layers.tertiary_layer_buttons.buttons, &config),
     };
 
     let tertiary2_layer = FunctionLayer {
-        buttons: tertiary2_layer_buttons,
+        buttons: build_layer_vectors(&config.layers.tertiary2_layer_buttons.buttons, &config),
     };
 
     let tertiary3_layer = FunctionLayer {
-        buttons: tertiary3_layer_buttons,
+        buttons: build_layer_vectors(&config.layers.tertiary3_layer_buttons.buttons, &config),
     };
 
     [primary_layer, secondary_layer, tertiary_layer, tertiary2_layer, tertiary3_layer]
 }
 
 fn main() {
-    let config_path = "/etc/tiny-dfr.conf";
-    let mut config = Config::from_file(config_path).unwrap();
-    let mut last_modified_time = get_file_modified_time(config_path);
+    let mut config = Config::from_file(CONFIG_PATH).unwrap();
+    let mut last_modified_time = get_file_modified_time(CONFIG_PATH);
     let mut uinput = UInputHandle::new(OpenOptions::new().write(true).open("/dev/uinput").unwrap());
     let mut backlight = BacklightManager::new();
 
@@ -642,13 +622,13 @@ fn main() {
 
     PrivDrop::default()
         .user("nobody")
-        .group("nobody")
+        .group("nogroup")
         .group_list(&groups)
         .apply()
         .unwrap_or_else(|e| panic!("Failed to drop privileges: {}", e));
 
     let mut active_layer = config.ui.primary_layer as usize;
-    let mut layers = initialize_layers();
+    let mut layers = initialize_layers(&config);
 
     let mut needs_complete_redraw = true;
     let mut drm = DrmBackend::open_card().unwrap();
@@ -698,13 +678,13 @@ fn main() {
     let mut digitizer: Option<InputDevice> = None;
     let mut touches = HashMap::new();
     loop {
-        let current_modified_time = get_file_modified_time(config_path);
+        let current_modified_time = get_file_modified_time(CONFIG_PATH);
         if current_modified_time != last_modified_time {
-            match Config::from_file(config_path) {
+            match Config::from_file(CONFIG_PATH) {
                 Ok(new_config) => {
                     config = new_config;
                     last_modified_time = current_modified_time;
-                    layers = initialize_layers();
+                    layers = initialize_layers(&config);
                     if width < 2170 {
                         for layer in &mut layers {
                         layer.buttons.remove(0);

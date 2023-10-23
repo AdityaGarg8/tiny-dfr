@@ -7,3 +7,6 @@ StartLimitBurst=2
 [Service]
 ExecStart=/usr/bin/tiny-dfr
 Restart=always
+
+[Install]
+WantedBy=multi-user.target
