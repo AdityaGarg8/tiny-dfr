@@ -1,6 +1,6 @@
 [package]
 name = "tiny-dfr"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 license = "MIT AND Apache-2.0"
 description = "The most basic dynamic function row daemon possible"
@@ -11,7 +11,7 @@ repository = "https://github.com/WhatAmISupposedToPutHere/tiny-dfr"
 
 [dependencies]
 cairo-rs = { version = "0.18", default-features = false }
-librsvg = "2.56.0"
+librsvg = { git = "https://gitlab.gnome.org/WhyHelloThere/librsvg.git", rev = "cb3d568d30207e0512f486a30001effabb80bb04", version = "2.57.0" }
 drm = "0.9"
 anyhow = "1"
 input = "0.8"
@@ -19,9 +19,9 @@ libc = "0.2"
 input-linux = "0.6"
 input-linux-sys = "0.8"
 nix = "0.26"
-privdrop = "0.5.3"
-serde = { version = "1.0.164", features = ["derive"] }
-toml = "0.7.5"
-icon-loader = "0.4.0"
-image = "0.24.7"
-chrono = "0.4.31"
+privdrop = "0.5"
+serde = { version = "1", features = ["derive"] }
+toml = "0.7"
+icon-loader = "0.4"
+image = "0.24"
+chrono = "0.4"
