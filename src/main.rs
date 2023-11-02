@@ -68,7 +68,7 @@ impl Button {
             image: ButtonImage::Text(text),
         }
     }
-    fn new_icon(icon_name: &'static str, action: Key, app_icon: &str, icon_theme: &str) -> Button {
+    fn new_icon(icon_name: &str, action: Key, icon_theme: &str) -> Button {
         let mut search_paths: Vec<PathBuf> = vec![
             PathBuf::from("/usr/share/tiny-dfr/icons/"),
             PathBuf::from("/usr/share/icons/"),
@@ -79,7 +79,7 @@ impl Button {
         loader.set_theme_name_provider(icon_theme);
         loader.update_theme_name().unwrap();
         let image;
-        match loader.load_icon(app_icon) {
+        match loader.load_icon(icon_name) {
             Some(icon_loader) => {
                 let icon = icon_loader.file_for_size(512);
                 match icon.icon_type() {
@@ -97,8 +97,8 @@ impl Button {
             None => {
                 // If loading the icon from the theme fails, try /usr/share/pixmaps
 
-                let icon_path_svg = Path::new("/usr/share/pixmaps").join(format!("{}.svg", app_icon));
-                let icon_path_png = Path::new("/usr/share/pixmaps").join(format!("{}.png", app_icon));
+                let icon_path_svg = Path::new("/usr/share/pixmaps").join(format!("{}.svg", icon_name));
+                let icon_path_png = Path::new("/usr/share/pixmaps").join(format!("{}.png", icon_name));
 
 
                 if icon_path_svg.exists() {
@@ -107,7 +107,8 @@ impl Button {
                         image = ButtonImage::Png(image::open(icon_path_png).unwrap());
                 } else {
                     // If the icon is not found in /usr/share/pixmaps, use the icon_name as text
-                        image = ButtonImage::Text(icon_name);
+                        let icon_name_label: &'static str = Box::leak(format!("{}", icon_name).into_boxed_str());
+                        image = ButtonImage::Text(icon_name_label);
                 }
             }
         };
@@ -539,68 +540,68 @@ fn initialize_layers() -> [FunctionLayer; 5] {
 
     let secondary_layer_buttons = vec![
         Button::new_text("esc", Key::Esc),
-        Button::new_icon("Brightness_low", Key::BrightnessDown, "display-brightness-low-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Brightness_high", Key::BrightnessUp, "display-brightness-high-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Mic_mute", Key::MicMute, "microphone-disabled-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Search", Key::Search, "system-search-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Keyboard_brightness_low", Key::IllumDown, "keyboard-brightness-low-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Keyboard_brightness_high", Key::IllumUp, "keyboard-brightness-high-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Previous_song", Key::PreviousSong, "media-seek-backward-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Play/Pause", Key::PlayPause, "media-playback-start-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Next_song", Key::NextSong, "media-seek-forward-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Mute", Key::Mute, "audio-volume-muted-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Decrease_volume", Key::VolumeDown, "audio-volume-low-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Increase_volume", Key::VolumeUp, "audio-volume-high-symbolic", &config.ui.icon_theme),
+        Button::new_icon("display-brightness-low-symbolic", Key::BrightnessDown, &config.ui.icon_theme),
+        Button::new_icon("display-brightness-high-symbolic", Key::BrightnessUp, &config.ui.icon_theme),
+        Button::new_icon("microphone-disabled-symbolic", Key::MicMute, &config.ui.icon_theme),
+        Button::new_icon("system-search-symbolic", Key::Search, &config.ui.icon_theme),
+        Button::new_icon("keyboard-brightness-low-symbolic", Key::IllumDown, &config.ui.icon_theme),
+        Button::new_icon("keyboard-brightness-high-symbolic", Key::IllumUp, &config.ui.icon_theme),
+        Button::new_icon("media-seek-backward-symbolic", Key::PreviousSong, &config.ui.icon_theme),
+        Button::new_icon("media-playback-start-symbolic", Key::PlayPause, &config.ui.icon_theme),
+        Button::new_icon("media-seek-forward-symbolic", Key::NextSong, &config.ui.icon_theme),
+        Button::new_icon("audio-volume-muted-symbolic", Key::Mute, &config.ui.icon_theme),
+        Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown, &config.ui.icon_theme),
+        Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp, &config.ui.icon_theme),
     ];
 
     let tertiary_layer_buttons = vec![
         Button::new_text("esc", Key::Esc),
-        Button::new_icon("app1", Key::Prog1, &config.apps.app1_icon, &config.apps.app_icon_theme),
-        Button::new_icon("app2", Key::Prog2, &config.apps.app2_icon, &config.apps.app_icon_theme),
-        Button::new_icon("app3", Key::Prog3, &config.apps.app3_icon, &config.apps.app_icon_theme),
-        Button::new_icon("app4", Key::Prog4, &config.apps.app4_icon, &config.apps.app_icon_theme),
-        Button::new_icon("Show_utility_apps", Key::Macro1, "go-next-symbolic", &config.ui.icon_theme),
+        Button::new_icon(&config.apps.app1_icon, Key::Prog1, &config.apps.app_icon_theme),
+        Button::new_icon(&config.apps.app2_icon, Key::Prog2, &config.apps.app_icon_theme),
+        Button::new_icon(&config.apps.app3_icon, Key::Prog3, &config.apps.app_icon_theme),
+        Button::new_icon(&config.apps.app4_icon, Key::Prog4, &config.apps.app_icon_theme),
+        Button::new_icon("go-next-symbolic", Key::Macro1, &config.ui.icon_theme),
         Button::new_time(config.time.use_24_hr),
         Button::new_blank(),
         Button::new_blank(),
-        Button::new_icon("Decrease_volume", Key::VolumeDown, "audio-volume-low-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Increase_volume", Key::VolumeUp, "audio-volume-high-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Play/Pause", Key::PlayPause, "media-playback-start-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Search", Key::Search, "system-search-symbolic", &config.ui.icon_theme),
-        Button::new_icon("All_media_controls", Key::Macro3, "go-next-symbolic", &config.ui.icon_theme),
+        Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown, &config.ui.icon_theme),
+        Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp, &config.ui.icon_theme),
+        Button::new_icon("media-playback-start-symbolic", Key::PlayPause, &config.ui.icon_theme),
+        Button::new_icon("system-search-symbolic", Key::Search, &config.ui.icon_theme),
+        Button::new_icon("go-next-symbolic", Key::Macro3, &config.ui.icon_theme),
     ];
 
     let tertiary2_layer_buttons = vec![
         Button::new_text("esc", Key::Esc),
-        Button::new_icon("Show_custom_apps", Key::Macro2, "go-previous-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Web_browser", Key::WWW, "web-browser-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Calculator", Key::Calc, "accessories-calculator-symbolic", &config.ui.icon_theme),
-        Button::new_icon("File_browser", Key::File, "system-file-manager-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Apps", Key::AllApplications, "view-app-grid-symbolic", &config.ui.icon_theme),
+        Button::new_icon("go-previous-symbolic", Key::Macro2, &config.ui.icon_theme),
+        Button::new_icon("web-browser-symbolic", Key::WWW, &config.ui.icon_theme),
+        Button::new_icon("accessories-calculator-symbolic", Key::Calc, &config.ui.icon_theme),
+        Button::new_icon("system-file-manager-symbolic", Key::File, &config.ui.icon_theme),
+        Button::new_icon("view-app-grid-symbolic", Key::AllApplications, &config.ui.icon_theme),
         Button::new_time(config.time.use_24_hr),
         Button::new_blank(),
         Button::new_blank(),
-        Button::new_icon("Decrease_volume", Key::VolumeDown, "audio-volume-low-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Increase_volume", Key::VolumeUp, "audio-volume-high-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Play/Pause", Key::PlayPause, "media-playback-start-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Search", Key::Search, "system-search-symbolic", &config.ui.icon_theme),
-        Button::new_icon("All_media_controls", Key::Macro3, "go-next-symbolic", &config.ui.icon_theme),
+        Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown, &config.ui.icon_theme),
+        Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp, &config.ui.icon_theme),
+        Button::new_icon("media-playback-start-symbolic", Key::PlayPause, &config.ui.icon_theme),
+        Button::new_icon("system-search-symbolic", Key::Search, &config.ui.icon_theme),
+        Button::new_icon("go-next-symbolic", Key::Macro3, &config.ui.icon_theme),
     ];
 
     let tertiary3_layer_buttons = vec![
         Button::new_text("esc", Key::Esc),
-        Button::new_icon("Show_custom_apps", Key::Macro2, "go-previous-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Brightness_low", Key::BrightnessDown, "display-brightness-low-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Brightness_high", Key::BrightnessUp, "display-brightness-high-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Mic_mute", Key::MicMute, "microphone-disabled-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Keyboard_brightness_low", Key::IllumDown, "keyboard-brightness-low-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Keyboard_brightness_high", Key::IllumUp, "keyboard-brightness-high-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Previous_Song", Key::PreviousSong, "media-seek-backward-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Play/Pause", Key::PlayPause, "media-playback-start-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Next_Song", Key::NextSong, "media-seek-forward-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Mute", Key::Mute, "audio-volume-muted-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Decrease_volume", Key::VolumeDown, "audio-volume-low-symbolic", &config.ui.icon_theme),
-        Button::new_icon("Increase_volume", Key::VolumeUp, "audio-volume-high-symbolic", &config.ui.icon_theme),
+        Button::new_icon("go-previous-symbolic", Key::Macro2, &config.ui.icon_theme),
+        Button::new_icon("display-brightness-low-symbolic", Key::BrightnessDown, &config.ui.icon_theme),
+        Button::new_icon("display-brightness-high-symbolic", Key::BrightnessUp, &config.ui.icon_theme),
+        Button::new_icon("microphone-disabled-symbolic", Key::MicMute, &config.ui.icon_theme),
+        Button::new_icon("keyboard-brightness-low-symbolic", Key::IllumDown, &config.ui.icon_theme),
+        Button::new_icon("keyboard-brightness-high-symbolic", Key::IllumUp, &config.ui.icon_theme),
+        Button::new_icon("media-seek-backward-symbolic", Key::PreviousSong, &config.ui.icon_theme),
+        Button::new_icon("media-playback-start-symbolic", Key::PlayPause, &config.ui.icon_theme),
+        Button::new_icon("media-seek-forward-symbolic", Key::NextSong, &config.ui.icon_theme),
+        Button::new_icon("audio-volume-muted-symbolic", Key::Mute, &config.ui.icon_theme),
+        Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown, &config.ui.icon_theme),
+        Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp, &config.ui.icon_theme),
     ];
 
     let primary_layer = FunctionLayer {
