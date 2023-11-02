@@ -24,12 +24,13 @@ use rsvg::{CairoRenderer, Loader, SvgHandle};
 use serde::Deserialize;
 use std::{
     collections::HashMap,
-    fs::{read_to_string, File, OpenOptions},
+    fs::{read_to_string, self, File, OpenOptions},
     os::{
         fd::AsRawFd,
         unix::{fs::OpenOptionsExt, io::OwnedFd},
     },
     path::{Path, PathBuf},
+    time::{SystemTime},
 };
 
 mod backlight;
@@ -368,8 +369,62 @@ impl Config {
     }
 }
 
+
+fn get_file_modified_time(path: &str) -> Option<SystemTime> {
+    fs::metadata(path)
+        .ok()
+        .map(|metadata| metadata.modified().ok())
+        .flatten()
+}
+
+fn initialize_layers() -> [FunctionLayer; 2] {
+    let primary_layer_buttons = vec![
+        Button::new_text("esc", Key::Esc),
+        Button::new_text("F1", Key::F1),
+        Button::new_text("F2", Key::F2),
+        Button::new_text("F3", Key::F3),
+        Button::new_text("F4", Key::F4),
+        Button::new_text("F5", Key::F5),
+        Button::new_text("F6", Key::F6),
+        Button::new_text("F7", Key::F7),
+        Button::new_text("F8", Key::F8),
+        Button::new_text("F9", Key::F9),
+        Button::new_text("F10", Key::F10),
+        Button::new_text("F11", Key::F11),
+        Button::new_text("F12", Key::F12),
+    ];
+
+    let secondary_layer_buttons = vec![
+        Button::new_text("esc", Key::Esc),
+        Button::new_icon("display-brightness-low-symbolic", Key::BrightnessDown),
+        Button::new_icon("display-brightness-high-symbolic", Key::BrightnessUp),
+        Button::new_icon("microphone-disabled-symbolic", Key::MicMute),
+        Button::new_icon("system-search-symbolic", Key::Search),
+        Button::new_icon("keyboard-brightness-low-symbolic", Key::IllumDown),
+        Button::new_icon("keyboard-brightness-high-symbolic", Key::IllumUp),
+        Button::new_icon("media-seek-backward-symbolic", Key::PreviousSong),
+        Button::new_icon("media-playback-start-symbolic", Key::PlayPause),
+        Button::new_icon("media-seek-forward-symbolic", Key::NextSong),
+        Button::new_icon("audio-volume-muted-symbolic", Key::Mute),
+        Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown),
+        Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp),
+    ];
+
+    let primary_layer = FunctionLayer {
+        buttons: primary_layer_buttons,
+    };
+
+    let secondary_layer = FunctionLayer {
+        buttons: secondary_layer_buttons,
+    };
+
+    [primary_layer, secondary_layer]
+}
+
 fn main() {
-    let config = Config::from_file("/etc/tiny-dfr.conf").unwrap();
+    let config_path = "/etc/tiny-dfr.conf";
+    let mut config = Config::from_file(config_path).unwrap();
+    let mut last_modified_time = get_file_modified_time(config_path);
     let mut uinput = UInputHandle::new(OpenOptions::new().write(true).open("/dev/uinput").unwrap());
     let mut backlight = BacklightManager::new();
 
@@ -383,42 +438,7 @@ fn main() {
         .unwrap_or_else(|e| panic!("Failed to drop privileges: {}", e));
 
     let mut active_layer = config.ui.primary_layer as usize;
-    let mut layers = [
-        FunctionLayer {
-            buttons: vec![
-                Button::new_text("esc", Key::Esc),
-                Button::new_text("F1", Key::F1),
-                Button::new_text("F2", Key::F2),
-                Button::new_text("F3", Key::F3),
-                Button::new_text("F4", Key::F4),
-                Button::new_text("F5", Key::F5),
-                Button::new_text("F6", Key::F6),
-                Button::new_text("F7", Key::F7),
-                Button::new_text("F8", Key::F8),
-                Button::new_text("F9", Key::F9),
-                Button::new_text("F10", Key::F10),
-                Button::new_text("F11", Key::F11),
-                Button::new_text("F12", Key::F12),
-            ],
-        },
-        FunctionLayer {
-            buttons: vec![
-                Button::new_text("esc", Key::Esc),
-                Button::new_icon("display-brightness-low-symbolic", Key::BrightnessDown),
-                Button::new_icon("display-brightness-high-symbolic", Key::BrightnessUp),
-                Button::new_icon("microphone-disabled-symbolic", Key::MicMute),
-                Button::new_icon("system-search-symbolic", Key::Search),
-                Button::new_icon("keyboard-brightness-low-symbolic", Key::IllumDown),
-                Button::new_icon("keyboard-brightness-high-symbolic", Key::IllumUp),
-                Button::new_icon("media-seek-backward-symbolic", Key::PreviousSong),
-                Button::new_icon("media-playback-start-symbolic", Key::PlayPause),
-                Button::new_icon("media-seek-forward-symbolic", Key::NextSong),
-                Button::new_icon("audio-volume-muted-symbolic", Key::Mute),
-                Button::new_icon("audio-volume-low-symbolic", Key::VolumeDown),
-                Button::new_icon("audio-volume-high-symbolic", Key::VolumeUp),
-            ],
-        },
-    ];
+    let mut layers = initialize_layers();
 
     let mut needs_complete_redraw = true;
     let mut drm = DrmBackend::open_card().unwrap();
@@ -468,6 +488,27 @@ fn main() {
     let mut digitizer: Option<InputDevice> = None;
     let mut touches = HashMap::new();
     loop {
+        let current_modified_time = get_file_modified_time(config_path);
+        if current_modified_time != last_modified_time {
+            match Config::from_file(config_path) {
+                Ok(new_config) => {
+                    config = new_config;
+                    last_modified_time = current_modified_time;
+                    layers = initialize_layers();
+                    if width < 2170 {
+                        for layer in &mut layers {
+                        layer.buttons.remove(0);
+                        }
+                    }
+                    let refreshed_layer = config.ui.primary_layer as usize;
+                    active_layer = refreshed_layer;
+                    needs_complete_redraw = true;
+                }
+                Err(e) => {
+                    eprintln!("Failed to reload configuration: {}", e);
+                }
+            }
+        }
         if needs_complete_redraw || layers[active_layer].buttons.iter().any(|b| b.changed) {
             let clips = layers[active_layer].draw(&surface, &config, needs_complete_redraw);
             let data = surface.data().unwrap();
