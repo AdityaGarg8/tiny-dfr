@@ -1,5 +1,6 @@
 use anyhow::Result;
 use cairo::{Context, FontSlant, FontWeight, Format, ImageSurface, Rectangle};
+use chrono::Local;
 use drm::control::ClipRect;
 use icon_loader::{IconFileType, IconLoader};
 use image::{
@@ -41,14 +42,14 @@ use display::DrmBackend;
 
 const BUTTON_COLOR_INACTIVE: f64 = 0.200;
 const BUTTON_COLOR_ACTIVE: f64 = 0.400;
-const BUTTON_COLOR_BLANK: f64 = 0.0;
 const TIMEOUT_MS: i32 = 30 * 1000;
 
 enum ButtonImage {
     Text(&'static str),
     Svg(SvgHandle),
     Png(DynamicImage),
-    Blank
+    Time(u16),
+    Blank,
 }
 
 struct Button {
@@ -115,6 +116,14 @@ impl Button {
             active: false,
             changed: false,
             image,
+        }
+    }
+    fn new_time(use_24_hour: u16) -> Button {
+        Button {
+            action: Key::Time,
+            active: false,
+            changed: false,
+            image: ButtonImage::Time(use_24_hour),
         }
     }
     fn new_blank() -> Button {
@@ -190,6 +199,51 @@ impl Button {
                 let _ = c.set_source_surface(&png_surface, x, y);
                 let _ = c.paint().expect("Failed to composite PNG image");
             }
+            ButtonImage::Time(use_24_hour) => {
+                let current_time = Local::now();
+
+                // Format the time as a string
+                let day_of_month = current_time.format("%e").to_string();
+                let day_of_month = day_of_month.trim_start(); // Remove leading space if present
+                let twelve_hour = current_time.format("%l").to_string();
+                let twelve_hour = twelve_hour.trim_start(); // Remove leading space if present
+                let formatted_time; 
+                match use_24_hour {
+                    0 => {
+                        formatted_time = format!(
+                        "{}:{} {}    {} {} {}",
+                        twelve_hour,
+                        current_time.format("%M"),
+                        current_time.format("%p"),
+                        current_time.format("%a"),
+                        day_of_month,
+                        current_time.format("%b")
+                        );
+                    }
+                    1 => {
+                        formatted_time = format!(
+                        "{}:{}    {} {} {}",
+                        current_time.format("%H"),
+                        current_time.format("%M"),
+                        current_time.format("%a"),
+                        day_of_month,
+                        current_time.format("%b")
+                        );
+                    }
+                    _ => {
+                        formatted_time = "".to_string();
+                    }
+                }
+                // Calculate the text extents for the formatted time
+                let time_extents = c.text_extents(&formatted_time).unwrap();
+
+                // Display the formatted time
+                c.move_to(
+                    left_edge + button_width / 2.0 - time_extents.width() / 2.0,
+                    height / 2.0 + time_extents.height() / 2.0,
+                );
+                c.show_text(&formatted_time).unwrap();
+            }
             _ => {
             }
         }
@@ -239,80 +293,103 @@ impl FunctionLayer {
             let left_edge = i as f64 * (button_width + spacing_width);
             if !complete_redraw {
                 c.set_source_rgb(0.0, 0.0, 0.0);
-                c.rectangle(
-                    left_edge,
-                    bot - radius,
-                    button_width,
-                    top - bot + radius * 2.0,
-                );
+                if button.action == Key::Time {
+                    c.rectangle(
+                        left_edge,
+                        bot - radius,
+                        button_width * 3.0,
+                        top - bot + radius * 2.0,
+                    );
+                } else {
+                    c.rectangle(
+                        left_edge,
+                        bot - radius,
+                        button_width,
+                        top - bot + radius * 2.0,
+                    );
+                }
                 c.fill().unwrap();
             }
-            let color = if (button.action == Key::Unknown ||
-                           button.action == Key::Macro1 ||
-                           button.action == Key::Macro2 ||
-                           button.action == Key::Macro3 ||
-                           button.action == Key::Macro4) ||
-                           ((button.action == Key::WWW ||
-                           button.action == Key::AllApplications ||
-                           button.action == Key::Calc ||
-                           button.action == Key::File ||
-                           button.action == Key::Prog1 ||
-                           button.action == Key::Prog2 ||
-                           button.action == Key::Prog3 ||
-                           button.action == Key::Prog4) &&
-                           !button.active) {
-                BUTTON_COLOR_BLANK
-            } else if button.active {
+            let color = if button.active {
                 BUTTON_COLOR_ACTIVE
             } else {
                 BUTTON_COLOR_INACTIVE
             };
-            c.set_source_rgb(color, color, color);
-            // draw box with rounded corners
-            c.new_sub_path();
-            let left = left_edge + radius;
-            let right = left_edge + button_width - radius;
-            c.arc(
-                right,
-                bot,
-                radius,
-                (-90.0f64).to_radians(),
-                (0.0f64).to_radians(),
-            );
-            c.arc(
-                right,
-                top,
-                radius,
-                (0.0f64).to_radians(),
-                (90.0f64).to_radians(),
-            );
-            c.arc(
-                left,
-                top,
-                radius,
-                (90.0f64).to_radians(),
-                (180.0f64).to_radians(),
-            );
-            c.arc(
-                left,
-                bot,
-                radius,
-                (180.0f64).to_radians(),
-                (270.0f64).to_radians(),
-            );
-            c.close_path();
 
-            c.fill().unwrap();
+            if (button.action != Key::Time &&
+               button.action != Key::Unknown &&
+               button.action != Key::Macro1 &&
+               button.action != Key::Macro2 &&
+               button.action != Key::Macro3 &&
+               button.action != Key::Macro4) &&
+               ((button.action != Key::WWW &&
+                button.action != Key::AllApplications &&
+                button.action != Key::Calc &&
+                button.action != Key::File &&
+                button.action != Key::Prog1 &&
+                button.action != Key::Prog2 &&
+                button.action != Key::Prog3 &&
+                button.action != Key::Prog4) ||
+                button.active) {
+                // draw box with rounded corners
+                c.set_source_rgb(color, color, color);
+                c.new_sub_path();
+                let left = left_edge + radius;
+                let right = left_edge + button_width - radius;
+                c.arc(
+                    right,
+                    bot,
+                    radius,
+                    (-90.0f64).to_radians(),
+                    (0.0f64).to_radians(),
+                );
+                c.arc(
+                    right,
+                    top,
+                    radius,
+                    (0.0f64).to_radians(),
+                    (90.0f64).to_radians(),
+                );
+                c.arc(
+                    left,
+                    top,
+                    radius,
+                    (90.0f64).to_radians(),
+                    (180.0f64).to_radians(),
+                );
+                c.arc(
+                    left,
+                    bot,
+                    radius,
+                    (180.0f64).to_radians(),
+                    (270.0f64).to_radians(),
+                );
+                c.close_path();
+                c.fill().unwrap();
+            }
             c.set_source_rgb(1.0, 1.0, 1.0);
-            button.render(&c, height as f64, left_edge, button_width);
+            if button.action == Key::Time {
+                button.render(&c, height as f64, left_edge, button_width * 3.0);
+            } else {
+                button.render(&c, height as f64, left_edge, button_width);
+            }
 
             button.changed = false;
+            if button.action == Key::Time {
+            modified_regions.push(ClipRect {
+                x1: height as u16 - top as u16 - radius as u16,
+                y1: left_edge as u16,
+                x2: height as u16 - bot as u16 + radius as u16,
+                y2: left_edge as u16 + button_width as u16 * 3,
+            });
+            } else {
             modified_regions.push(ClipRect {
                 x1: height as u16 - top as u16 - radius as u16,
                 y1: left_edge as u16,
                 x2: height as u16 - bot as u16 + radius as u16,
                 y2: left_edge as u16 + button_width as u16,
             });
+            }
         }
 
         if complete_redraw {
@@ -413,10 +490,17 @@ struct AppConfig {
     app4_icon: String,
 }
 
+
+#[derive(Deserialize)]
+struct TimeConfig {
+    use_24_hr: u16,
+}
+
 #[derive(Deserialize)]
 struct Config {
     ui: UiConfig,
     apps: AppConfig,
+    time: TimeConfig,
 }
 
 impl Config {
@@ -476,6 +560,7 @@ fn initialize_layers() -> [FunctionLayer; 5] {
         Button::new_icon("app3", Key::Prog3, &config.apps.app3_icon, &config.apps.app_icon_theme),
         Button::new_icon("app4", Key::Prog4, &config.apps.app4_icon, &config.apps.app_icon_theme),
         Button::new_icon("Show_utility_apps", Key::Macro1, "go-next-symbolic", &config.ui.icon_theme),
+        Button::new_time(config.time.use_24_hr),
         Button::new_blank(),
         Button::new_blank(),
         Button::new_icon("Decrease_volume", Key::VolumeDown, "audio-volume-low-symbolic", &config.ui.icon_theme),
@@ -492,6 +577,7 @@ fn initialize_layers() -> [FunctionLayer; 5] {
         Button::new_icon("Calculator", Key::Calc, "accessories-calculator-symbolic", &config.ui.icon_theme),
         Button::new_icon("File_browser", Key::File, "system-file-manager-symbolic", &config.ui.icon_theme),
         Button::new_icon("Apps", Key::AllApplications, "view-app-grid-symbolic", &config.ui.icon_theme),
+        Button::new_time(config.time.use_24_hr),
         Button::new_blank(),
         Button::new_blank(),
         Button::new_icon("Decrease_volume", Key::VolumeDown, "audio-volume-low-symbolic", &config.ui.icon_theme),
@@ -628,6 +714,13 @@ fn main() {
                 }
             }
         }
+        if active_layer == 2 || active_layer == 3 {
+            if width < 2170 {
+                layers[active_layer].buttons[5].changed = true;
+            } else {
+                layers[active_layer].buttons[6].changed = true;
+            }
+        }
         if needs_complete_redraw || layers[active_layer].buttons.iter().any(|b| b.changed) {
             let clips = layers[active_layer].draw(&surface, &config, needs_complete_redraw);
             let data = surface.data().unwrap();
@@ -701,6 +794,10 @@ fn main() {
                                 x,
                                 y,
                             ) {
+                                let button = &mut layers[active_layer].buttons[btn as usize];
+                                if button.action == Key::Unknown || button.action == Key::Time {
+                                    continue;
+                                }
                                 touches.insert(dn.seat_slot(), (active_layer, btn));
                                 layers[active_layer].buttons[btn as usize]
                                     .set_active(&mut uinput, true);
@@ -722,14 +819,22 @@ fn main() {
                                 x,
                                 y,
                             );
-                            layers[layer].buttons[btn as usize].set_active(&mut uinput, hit);
+                                let button = &mut layers[layer].buttons[btn as usize];
+                                if button.action == Key::Unknown || button.action == Key::Time {
+                                    continue;
+                                }
+                            button.set_active(&mut uinput, hit);
                         }
                         TouchEvent::Up(up) => {
                             if !touches.contains_key(&up.seat_slot()) {
                                 continue;
                             }
                             let (layer, btn) = *touches.get(&up.seat_slot()).unwrap();
-                            layers[layer].buttons[btn as usize].set_active(&mut uinput, false);
+                            let button = &mut layers[layer].buttons[btn as usize];
+                            if button.action == Key::Unknown || button.action == Key::Time {
+                                continue;
+                            }
+                            button.set_active(&mut uinput, false);
                         }
                         _ => {}
                     }
