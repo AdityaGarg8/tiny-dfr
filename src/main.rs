@@ -198,7 +198,7 @@ impl FunctionLayer {
             c.set_source_rgb(0.0, 0.0, 0.0);
             c.paint().unwrap();
         }
-        c.select_font_face("sans-serif", FontSlant::Normal, FontWeight::Normal);
+        c.select_font_face(&config.ui.font, FontSlant::Normal, FontWeight::Normal);
         c.set_font_size(32.0);
         for (i, button) in self.buttons.iter_mut().enumerate() {
             if !button.changed && !complete_redraw {
@@ -353,6 +353,7 @@ enum LayerType {
 struct UiConfig {
     primary_layer: LayerType,
     secondary_layer: LayerType,
+    font: String,
     icon_theme: String,
 }
 
@@ -468,7 +469,7 @@ fn main() {
     let mut touches = HashMap::new();
     loop {
         if needs_complete_redraw || layers[active_layer].buttons.iter().any(|b| b.changed) {
-            let clips = layers[active_layer].draw(&surface, needs_complete_redraw);
+            let clips = layers[active_layer].draw(&surface, &config, needs_complete_redraw);
             let data = surface.data().unwrap();
             let mut fb = drm.map().unwrap();
 
