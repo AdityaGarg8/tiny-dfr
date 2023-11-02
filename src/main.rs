@@ -693,12 +693,10 @@ fn main() {
                 }
             }
         }
-        if active_layer == 2 || active_layer == 3 {
-            if width < 2170 {
-                layers[active_layer].buttons[5].changed = true;
-            } else {
-                layers[active_layer].buttons[6].changed = true;
-            }
+	for button in &mut layers[active_layer].buttons {
+    	    if button.action == Key::Time {
+                button.changed = true;
+    	    }
         }
         if needs_complete_redraw || layers[active_layer].buttons.iter().any(|b| b.changed) {
             let clips = layers[active_layer].draw(&surface, &config, needs_complete_redraw);
