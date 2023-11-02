@@ -1,6 +1,6 @@
 use anyhow::Result;
 use cairo::{Context, FontSlant, FontWeight, Format, ImageSurface, Rectangle};
-use chrono::Local;
+use chrono::{Local, Locale};
 use drm::control::ClipRect;
 use icon_loader::{IconFileType, IconLoader};
 use image::{
@@ -50,7 +50,7 @@ enum ButtonImage {
     Text(String),
     Svg(SvgHandle),
     Png(DynamicImage),
-    Time(u16),
+    Time(u16, String),
     Blank,
 }
 
@@ -120,12 +120,12 @@ impl Button {
             image,
         }
     }
-    fn new_time(use_24_hour: u16) -> Button {
+    fn new_time(use_24_hour: u16, locale: &str) -> Button {
         Button {
             action: Key::Time,
             active: false,
             changed: false,
-            image: ButtonImage::Time(use_24_hour),
+            image: ButtonImage::Time(use_24_hour, locale.to_string()),
         }
     }
     fn new_blank() -> Button {
@@ -201,35 +201,31 @@ impl Button {
                 let _ = c.set_source_surface(&png_surface, x, y);
                 let _ = c.paint().expect("Failed to composite PNG image");
             }
-            ButtonImage::Time(use_24_hour) => {
+            ButtonImage::Time(use_24_hour, locale) => {
                 let current_time = Local::now();
-
+                let current_locale = Locale::try_from(locale.as_str()).unwrap_or(Locale::POSIX);
                 // Format the time as a string
-                let day_of_month = current_time.format("%e").to_string();
-                let day_of_month = day_of_month.trim_start(); // Remove leading space if present
-                let twelve_hour = current_time.format("%l").to_string();
-                let twelve_hour = twelve_hour.trim_start(); // Remove leading space if present
                 let formatted_time; 
                 match use_24_hour {
                     0 => {
                         formatted_time = format!(
                         "{}:{} {}    {} {} {}",
-                        twelve_hour,
-                        current_time.format("%M"),
-                        current_time.format("%p"),
-                        current_time.format("%a"),
-                        day_of_month,
-                        current_time.format("%b")
+                        current_time.format_localized("%-l", current_locale),
+                        current_time.format_localized("%M", current_locale),
+                        current_time.format_localized("%p", current_locale),
+                        current_time.format_localized("%a", current_locale),
+                        current_time.format_localized("%-e", current_locale),
+                        current_time.format_localized("%b", current_locale)
                         );
                     }
                     1 => {
                         formatted_time = format!(
                         "{}:{}    {} {} {}",
-                        current_time.format("%H"),
-                        current_time.format("%M"),
-                        current_time.format("%a"),
-                        day_of_month,
-                        current_time.format("%b")
+                        current_time.format_localized("%H", current_locale),
+                        current_time.format_localized("%M", current_locale),
+                        current_time.format_localized("%a", current_locale),
+                        current_time.format_localized("%-e", current_locale),
+                        current_time.format_localized("%b", current_locale)
                         );
                     }
                     _ => {
@@ -475,6 +471,8 @@ struct ButtonConfig {
     mode: String,
     #[serde(default)]
     theme: String,
+    #[serde(default)]
+    locale: String,
 }
 
 #[derive(Deserialize)]
@@ -513,6 +511,7 @@ struct UiConfig {
 #[derive(Deserialize)]
 struct TimeConfig {
     use_24_hr: u16,
+    locale: String,
 }
 
 #[derive(Deserialize)]
@@ -554,9 +553,13 @@ fn build_layer_vectors(buttons: &Vec<ButtonConfig>, config: &Config) -> Vec<Butt
         let key = button_config.key.as_str();
         let theme = button_config.theme.as_str();
         let mode = button_config.mode.as_str();
+        let locale = button_config.locale.as_str();
         match mode {
             "blank" => vector.push(Button::new_blank()),
-            "time" => vector.push(Button::new_time(config.time.use_24_hr)),
+            "time" => {
+                let locale = locale.is_empty().then(|| config.time.locale.as_str()).unwrap_or(locale);
+                vector.push(Button::new_time(config.time.use_24_hr, locale));
+            },
             "app" | "media" | "text" => {
                 // handle missing input_linux::Keys
                 let key_map = KEY_MAP.get(key);
