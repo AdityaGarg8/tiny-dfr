@@ -1,10 +1,11 @@
 use std::{
-    fs::{File, OpenOptions, read_to_string},
+    fs::{File, OpenOptions, read_to_string, self},
     os::{
         fd::AsRawFd,
         unix::{io::OwnedFd, fs::OpenOptionsExt}
     },
     path::{Path, PathBuf},
+    time::{SystemTime},
     collections::HashMap,
     cmp::min,
     mem
@@ -426,6 +427,13 @@ fn load_config() -> Config {
     }
 }
 
+fn get_file_modified_time(path: &str) -> Option<SystemTime> {
+    fs::metadata(path)
+        .ok()
+        .map(|metadata| metadata.modified().ok())
+        .flatten()
+}
+
 fn main() {
     let mut uinput = UInputHandle::new(OpenOptions::new().write(true).open("/dev/uinput").unwrap());
     let mut backlight = BacklightManager::new();
@@ -457,6 +465,8 @@ fn main() {
     let pollfd_tb = PollFd::new(&fd_tb, PollFlags::POLLIN);
     let pollfd_main = PollFd::new(&fd_main, PollFlags::POLLIN);
     uinput.set_evbit(EventKind::Key).unwrap();
+    let config_path = "/etc/tiny-dfr/config.toml";
+    let mut last_modified_time = get_file_modified_time(config_path);
     let mut layers = mem::take(&mut cfg.layers);
 
     if width >= 2170 {
@@ -490,6 +500,20 @@ fn main() {
     let mut digitizer: Option<InputDevice> = None;
     let mut touches = HashMap::new();
     loop {
+        let current_modified_time = get_file_modified_time(config_path);
+        if current_modified_time != last_modified_time {
+            cfg = load_config();
+            layers = mem::take(&mut cfg.layers);
+            if width >= 2170 {
+                for layer in &mut layers {
+                    layer.buttons.insert(0, Button::new_text("esc".to_string(), Key::Esc));
+                }
+            }
+            active_layer = 0;
+            last_modified_time = current_modified_time;
+            needs_complete_redraw = true;
+        }
+
         let mut next_timeout_ms = TIMEOUT_MS;
 
         if cfg.enable_pixel_shift {
