@@ -24,6 +24,10 @@ EnablePixelShift = false
 # https://www.freedesktop.org/software/fontconfig/fontconfig-user.html
 FontTemplate = ":bold"
 
+# Set this to the icon theme you want to use for Media controls.
+# Theme can be from "/usr/share/tiny-dfr/icons", "/etc/tiny-dfr/icons" or "/usr/share/icons"
+MediaIconTheme = "tiny-dfr-icons"
+
 # This key defines the contents of the primary layer
 # (the one with F{number} keys)
 # You can change the individual buttons, add, or remove them
@@ -57,17 +61,17 @@ PrimaryLayerKeys = [
 
 # This key defines the contents of the media key layer
 MediaLayerKeys = [
-    { Svg = "brightness_low",  Action = "BrightnessDown" },
-    { Svg = "brightness_high", Action = "BrightnessUp"   },
-    { Svg = "mic_off",         Action = "MicMute"        },
-    { Svg = "search",          Action = "Search"         },
-    { Svg = "backlight_low",   Action = "IllumDown"      },
-    { Svg = "backlight_high",  Action = "IllumUp"        },
-    { Svg = "fast_rewind",     Action = "PreviousSong"   },
-    { Svg = "play_pause",      Action = "PlayPause"      },
-    { Svg = "fast_forward",    Action = "NextSong"       },
-    { Svg = "volume_off",      Action = "Mute"           },
-    { Svg = "volume_down",     Action = "VolumeDown"     },
-    { Svg = "volume_up",       Action = "VolumeUp"       }
+    { Svg = "display-brightness-low-symbolic",   Action = "BrightnessDown" },
+    { Svg = "display-brightness-high-symbolic",  Action = "BrightnessUp"   },
+    { Svg = "microphone-disabled-symbolic",      Action = "MicMute"        },
+    { Svg = "system-search-symbolic",            Action = "Search"         },
+    { Svg = "keyboard-brightness-low-symbolic",  Action = "IllumDown"      },
+    { Svg = "keyboard-brightness-high-symbolic", Action = "IllumUp"        },
+    { Svg = "media-seek-backward-symbolic",      Action = "PreviousSong"   },
+    { Svg = "media-playback-start-symbolic",     Action = "PlayPause"      },
+    { Svg = "media-seek-forward-symbolic",       Action = "NextSong"       },
+    { Svg = "audio-volume-muted-symbolic",       Action = "Mute"           },
+    { Svg = "audio-volume-low-symbolic",         Action = "VolumeDown"     },
+    { Svg = "audio-volume-high-symbolic",        Action = "VolumeUp"       }
 ]
 
