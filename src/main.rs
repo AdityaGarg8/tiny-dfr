@@ -12,6 +12,10 @@ use std::{
 use std::os::fd::AsFd;
 use cairo::{ImageSurface, Format, Context, Surface, Rectangle, FontFace};
 use rsvg::{Loader, CairoRenderer, SvgHandle};
+use image::{
+        DynamicImage, Pixel,
+        imageops::{resize, FilterType},
+};
 use drm::control::ClipRect;
 use anyhow::{Error, Result};
 use input::{
@@ -63,7 +67,7 @@ struct ConfigProxy {
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ButtonConfig {
-    svg: Option<String>,
+    icon: Option<String>,
     text: Option<String>,
     action: Key
 }
@@ -81,7 +85,8 @@ struct Theme {
 
 enum ButtonImage {
     Text(String),
-    Svg(SvgHandle)
+    Svg(SvgHandle),
+    Png(DynamicImage)
 }
 
 struct Button {
@@ -95,10 +100,10 @@ impl Button {
     fn with_config(cfg: ButtonConfig) -> Button {
         if let Some(text) = cfg.text {
             Button::new_text(text, cfg.action)
-        } else if let Some(svg) = cfg.svg {
-            Button::new_svg(&svg, cfg.action)
+        } else if let Some(icon) = cfg.icon {
+            Button::new_icon(&icon, cfg.action)
         } else {
-            panic!("Invalid config, a button must have either Text or Svg")
+            panic!("Invalid config, a button must have either Text, Svg or Png")
         }
     }
     fn new_text(text: String, action: Key) -> Button {
@@ -109,7 +114,7 @@ impl Button {
             image: ButtonImage::Text(text)
         }
     }
-    fn new_svg(icon_name: &str, action: Key) -> Button {
+    fn new_icon(icon_name: &str, action: Key) -> Button {
         let theme = load_theme();
         let icon_theme = theme.media_icon_theme;
         let mut search_paths: Vec<PathBuf> = vec![
@@ -123,14 +128,14 @@ impl Button {
         loader.set_theme_name_provider(icon_theme);
         loader.update_theme_name().unwrap();
         let icon_loader = loader.load_icon(icon_name).unwrap();
-        let icon = icon_loader.file_for_size(16);
+        let icon = icon_loader.file_for_size(ICON_SIZE as u16);
         let image;
         match icon.icon_type() {
             IconFileType::SVG => {
                 image = ButtonImage::Svg(Loader::new().read_path(icon.path()).unwrap());
             }
             IconFileType::PNG => {
-                panic!("PNG icons are not support")
+                image = ButtonImage::Png(image::open(icon.path()).unwrap());
             }
             IconFileType::XPM => {
                 panic!("Legacy XPM icons are not supported")
@@ -161,6 +166,51 @@ impl Button {
                 renderer.render_document(c,
                     &Rectangle::new(x, y, ICON_SIZE as f64, ICON_SIZE as f64)
                 ).unwrap();
+            }
+            ButtonImage::Png(png) => {
+                let x = button_left_edge + (button_width as f64 / 2.0 - (ICON_SIZE / 2) as f64).round();
+                let y = y_shift + ((height as f64 - ICON_SIZE as f64) / 2.0).round();
+
+                // Resize the PNG image to match the specified size
+                let resized_png = resize(
+                    png,
+                    ICON_SIZE as u32,
+                    ICON_SIZE as u32,
+                    FilterType::Lanczos3,
+                );
+
+                // Convert the resized PNG image to a Cairo ImageSurface
+                let png_surface = ImageSurface::create(
+                    Format::ARgb32,
+                    ICON_SIZE as i32,
+                    ICON_SIZE as i32,
+                ).expect("Failed to create PNG surface");
+
+                let png_context = Context::new(&png_surface)
+                    .expect("Failed to create PNG context");
+
+                // Iterate over the pixels of the resized PNG image and paint them on the Cairo surface
+                for (x_pixel, y_pixel, pixel) in resized_png.enumerate_pixels() {
+                    let channels = pixel.channels();
+                    let (r, g, b, a) = (channels[0], channels[1], channels[2], channels[3]);
+                    let _ = png_context.set_source_rgba(
+                        r as f64 / 255.0,
+                        g as f64 / 255.0,
+                        b as f64 / 255.0,
+                        a as f64 / 255.0,
+                    );
+                    let _ = png_context.rectangle(
+                        x_pixel as f64,
+                        y_pixel as f64,
+                        1.0,
+                        1.0,
+                    );
+                    let _ = png_context.fill();
+                }
+
+                // Composite the PNG surface onto the main context (the `c` context)
+                let _ = c.set_source_surface(&png_surface, x, y);
+                let _ = c.paint().expect("Failed to composite PNG image");
             }
         }
     }

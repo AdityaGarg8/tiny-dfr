@@ -36,10 +36,10 @@ MediaIconTheme = "tiny-dfr-icons"
 PrimaryLayerKeys = [
     # Action defines the key code to send when the button is pressed
     # Text defines the button label
-    # Svg specifies the icon to be used for the button.
-    # Do not include the .svg extension in the file name.
-    # Svgs are looked up in /etc/tiny-dfr first and then in /usr/share/tiny-dfr
-    # Only one of Text or Svg is allowed,
+    # Icon specifies the icon to be used for the button.
+    # Do not include the .svg or .png extension in the file name.
+    # Icons are looked up in the theme set as MediaIconTheme and then hicolor
+    # Only one of Text or Icon is allowed,
     # if both are present, the behavior is undefined.
     # For the list of supported key codes see
     # https://docs.rs/input-linux/latest/input_linux/enum.Key.html
@@ -61,17 +61,17 @@ PrimaryLayerKeys = [
 
 # This key defines the contents of the media key layer
 MediaLayerKeys = [
-    { Svg = "display-brightness-low-symbolic",   Action = "BrightnessDown" },
-    { Svg = "display-brightness-high-symbolic",  Action = "BrightnessUp"   },
-    { Svg = "microphone-disabled-symbolic",      Action = "MicMute"        },
-    { Svg = "system-search-symbolic",            Action = "Search"         },
-    { Svg = "keyboard-brightness-low-symbolic",  Action = "IllumDown"      },
-    { Svg = "keyboard-brightness-high-symbolic", Action = "IllumUp"        },
-    { Svg = "media-seek-backward-symbolic",      Action = "PreviousSong"   },
-    { Svg = "media-playback-start-symbolic",     Action = "PlayPause"      },
-    { Svg = "media-seek-forward-symbolic",       Action = "NextSong"       },
-    { Svg = "audio-volume-muted-symbolic",       Action = "Mute"           },
-    { Svg = "audio-volume-low-symbolic",         Action = "VolumeDown"     },
-    { Svg = "audio-volume-high-symbolic",        Action = "VolumeUp"       }
+    { Icon = "display-brightness-low-symbolic",   Action = "BrightnessDown" },
+    { Icon = "display-brightness-high-symbolic",  Action = "BrightnessUp"   },
+    { Icon = "microphone-disabled-symbolic",      Action = "MicMute"        },
+    { Icon = "system-search-symbolic",            Action = "Search"         },
+    { Icon = "keyboard-brightness-low-symbolic",  Action = "IllumDown"      },
+    { Icon = "keyboard-brightness-high-symbolic", Action = "IllumUp"        },
+    { Icon = "media-seek-backward-symbolic",      Action = "PreviousSong"   },
+    { Icon = "media-playback-start-symbolic",     Action = "PlayPause"      },
+    { Icon = "media-seek-forward-symbolic",       Action = "NextSong"       },
+    { Icon = "audio-volume-muted-symbolic",       Action = "Mute"           },
+    { Icon = "audio-volume-low-symbolic",         Action = "VolumeDown"     },
+    { Icon = "audio-volume-high-symbolic",        Action = "VolumeUp"       }
 ]
 
