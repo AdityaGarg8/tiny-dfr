@@ -35,6 +35,7 @@ use privdrop::PrivDrop;
 use serde::Deserialize;
 use freetype::Library as FtLibrary;
 use icon_loader::{IconFileType, IconLoader};
+use chrono::{Local, Timelike};
 
 mod backlight;
 mod display;
@@ -63,6 +64,7 @@ struct ConfigProxy {
     font_template: Option<String>,
     media_icon_theme: Option<String>,
     app_icon_theme: Option<String>,
+    show_24_hr_time: Option<bool>,
     primary_layer_keys: Option<Vec<ButtonConfig>>,
     media_layer_keys: Option<Vec<ButtonConfig>>,
     app_layer_keys1: Option<Vec<ButtonConfig>>,
@@ -92,10 +94,15 @@ struct Theme {
     app_icon_theme: String
 }
 
+struct Time {
+    show_24_hr_time: bool
+}
+
 enum ButtonImage {
     Text(String),
     Svg(SvgHandle),
     Png(DynamicImage),
+    Time,
     Blank
 }
 
@@ -115,6 +122,8 @@ impl Button {
         } else if let Some(mode) = cfg.mode {
             if mode.to_lowercase() == "blank" {
                 Button::new_blank(cfg.action)
+            } else if mode.to_lowercase() == "time" {
+                Button::new_time(cfg.action)
             } else {
                 panic!("Invalid config, a button must have either Text, Svg, Png or be Blank")
             }
@@ -191,6 +200,14 @@ impl Button {
             image,
         }
     }
+    fn new_time(action: Key) -> Button {
+        Button {
+            action,
+            active: false,
+            changed: false,
+            image: ButtonImage::Time,
+        }
+    }
     fn new_blank(action: Key) -> Button {
         Button {
             action,
@@ -263,6 +280,37 @@ impl Button {
                 let _ = c.set_source_surface(&png_surface, x, y);
                 let _ = c.paint().expect("Failed to composite PNG image");
             }
+            ButtonImage::Time => {
+                let time = load_time();
+                let current_time = Local::now();
+                let formatted_time; 
+                if time.show_24_hr_time {
+                    formatted_time = format!(
+                    "{}:{}    {} {} {}",
+                     current_time.format("%H"),
+                     current_time.format("%M"),
+                     current_time.format("%a"),
+                     current_time.format("%-e"),
+                     current_time.format("%b")
+                );
+                } else {
+                    formatted_time = format!(
+                    "{}:{} {}    {} {} {}",
+                    current_time.format("%-l"),
+                    current_time.format("%M"),
+                    current_time.format("%p"),
+                    current_time.format("%a"),
+                    current_time.format("%-e"),
+                    current_time.format("%b")
+                );
+                }
+                let time_extents = c.text_extents(&formatted_time).unwrap();
+                c.move_to(
+                    button_left_edge + (button_width as f64 / 2.0 - time_extents.width() / 2.0).round(),
+                    y_shift + (height as f64 / 2.0 + time_extents.height() / 2.0).round()
+                );
+                c.show_text(&formatted_time).unwrap();
+           }
             _ => {
             }
         }
@@ -328,11 +376,16 @@ impl FunctionLayer {
             };
             if !complete_redraw {
                 c.set_source_rgb(0.0, 0.0, 0.0);
-                c.rectangle(left_edge, bot - radius, button_width, top - bot + radius * 2.0);
+                if button.action == Key::Time {
+                    c.rectangle(left_edge, bot - radius, button_width * 3.0, top - bot + radius * 2.0);
+                } else {
+                    c.rectangle(left_edge, bot - radius, button_width, top - bot + radius * 2.0);
+                }
                 c.fill().unwrap();
             }
 
             if (button.action != Key::Unknown &&
+               button.action != Key::Time &&
                button.action != Key::Macro1 &&
                button.action != Key::Macro2 &&
                button.action != Key::Macro3 &&
@@ -384,17 +437,30 @@ impl FunctionLayer {
             c.fill().unwrap();
             }
             c.set_source_rgb(1.0, 1.0, 1.0);
-            button.render(&c, height as f64, left_edge, button_width.ceil() as u64, pixel_shift_y);
+            if button.action == Key::Time {
+                button.render(&c, height as f64, left_edge, button_width.ceil() as u64 * 3, pixel_shift_y);
+            } else {
+                button.render(&c, height as f64, left_edge, button_width.ceil() as u64, pixel_shift_y);
+            }
 
             button.changed = false;
 
             if !complete_redraw {
-                modified_regions.push(ClipRect::new(
-                    height as u16 - top as u16 - radius as u16,
-                    left_edge as u16,
-                    height as u16 - bot as u16 + radius as u16,
-                    left_edge as u16 + button_width as u16
-                ));
+                if button.action == Key::Time {
+                    modified_regions.push(ClipRect::new(
+                        height as u16 - top as u16 - radius as u16,
+                        left_edge as u16,
+                        height as u16 - bot as u16 + radius as u16,
+                        left_edge as u16 + button_width as u16 * 3
+                    ));
+                } else {
+                    modified_regions.push(ClipRect::new(
+                        height as u16 - top as u16 - radius as u16,
+                        left_edge as u16,
+                        height as u16 - bot as u16 + radius as u16,
+                        left_edge as u16 + button_width as u16
+                    ));
+                }
             }
         }
 
@@ -470,7 +536,19 @@ fn load_theme() -> Theme {
     };
     Theme {
         media_icon_theme: base.media_icon_theme.unwrap(),
-        app_icon_theme: base.app_icon_theme.unwrap()
+        app_icon_theme: base.app_icon_theme.unwrap(),
+    }
+}
+
+fn load_time() -> Time {
+    let mut base = toml::from_str::<ConfigProxy>(&read_to_string("/usr/share/tiny-dfr/config.toml").unwrap()).unwrap();
+    let user = read_to_string("/etc/tiny-dfr/config.toml").map_err::<Error, _>(|e| e.into())
+        .and_then(|r| Ok(toml::from_str::<ConfigProxy>(&r)?));
+    if let Ok(user) = user {
+        base.show_24_hr_time = user.show_24_hr_time.or(base.show_24_hr_time);
+    };
+    Time {
+        show_24_hr_time: base.show_24_hr_time.unwrap()
     }
 }
 
@@ -557,6 +635,7 @@ fn main() {
     uinput.set_evbit(EventKind::Key).unwrap();
     let config_path = "/etc/tiny-dfr/config.toml";
     let mut last_modified_time = get_file_modified_time(config_path);
+    let mut last_redraw_minute = Local::now().minute();
     let mut layers = mem::take(&mut cfg.layers);
 
     if width >= 2170 {
@@ -614,6 +693,13 @@ fn main() {
             next_timeout_ms = min(next_timeout_ms, pixel_shift_next_timeout_ms);
         }
 
+        let current_minute = Local::now().minute();
+	for button in &mut layers[active_layer].buttons {
+    	    if (button.action == Key::Time) && (current_minute != last_redraw_minute) {
+                needs_complete_redraw = true;
+                last_redraw_minute = current_minute;
+    	    }
+    	}
         if needs_complete_redraw || layers[active_layer].buttons.iter().any(|b| b.changed) {
             let shift = if cfg.enable_pixel_shift {
                 pixel_shift.get()
@@ -670,6 +756,10 @@ fn main() {
                             let y = dn.y_transformed(height as u32);
                             let btn = (x / (width as f64 / layers[active_layer].buttons.len() as f64)) as u32;
                             if button_hit(layers[active_layer].buttons.len() as u32, btn, width, height, x, y) {
+                                let button = &mut layers[active_layer].buttons[btn as usize];
+                                if button.action == Key::Unknown || button.action == Key::Time {
+                                    continue;
+                                }
                                 touches.insert(dn.seat_slot(), (active_layer, btn));
                                 layers[active_layer].buttons[btn as usize].set_active(&mut uinput, true);
                             }
@@ -683,14 +773,22 @@ fn main() {
                             let y = mtn.y_transformed(height as u32);
                             let (layer, btn) = *touches.get(&mtn.seat_slot()).unwrap();
                             let hit = button_hit(layers[layer].buttons.len() as u32, btn, width, height, x, y);
-                            layers[layer].buttons[btn as usize].set_active(&mut uinput, hit);
+                            let button = &mut layers[layer].buttons[btn as usize];
+                            if button.action == Key::Unknown || button.action == Key::Time {
+                                continue;
+                            }
+                            button.set_active(&mut uinput, hit);
                         },
                         TouchEvent::Up(up) => {
                             if !touches.contains_key(&up.seat_slot()) {
                                 continue;
                             }
                             let (layer, btn) = *touches.get(&up.seat_slot()).unwrap();
-                            layers[layer].buttons[btn as usize].set_active(&mut uinput, false);
+                            let button = &mut layers[layer].buttons[btn as usize];
+                            if button.action == Key::Unknown || button.action == Key::Time {
+                                continue;
+                            }
+                            button.set_active(&mut uinput, false);
                         }
                         _ => {}
                     }

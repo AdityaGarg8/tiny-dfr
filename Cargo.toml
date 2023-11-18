@@ -26,6 +26,7 @@ rand = "0.8"
 freetype-rs = "0.32"
 icon-loader = "0.4"
 image = "0.24"
+chrono = "0.4"
 
 [build-dependencies]
 pkg-config = "0.3"
