@@ -57,37 +57,46 @@ const TIMEOUT_MS: i32 = 10 * 1000;
 #[serde(rename_all = "PascalCase")]
 struct ConfigProxy {
     media_layer_default: Option<bool>,
+    special_extended_mode: Option<bool>,
     show_button_outlines: Option<bool>,
     enable_pixel_shift: Option<bool>,
     font_template: Option<String>,
     media_icon_theme: Option<String>,
+    app_icon_theme: Option<String>,
     primary_layer_keys: Option<Vec<ButtonConfig>>,
-    media_layer_keys: Option<Vec<ButtonConfig>>
+    media_layer_keys: Option<Vec<ButtonConfig>>,
+    app_layer_keys1: Option<Vec<ButtonConfig>>,
+    app_layer_keys2: Option<Vec<ButtonConfig>>,
+    app_layer_keys3: Option<Vec<ButtonConfig>>
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ButtonConfig {
     icon: Option<String>,
+    mode: Option<String>,
     text: Option<String>,
     action: Key
 }
 
 struct Config {
+    media_layer_default: bool,
     show_button_outlines: bool,
     enable_pixel_shift: bool,
     font_face: FontFace,
-    layers: [FunctionLayer; 2]
+    layers: Vec<FunctionLayer>
 }
 
 struct Theme {
     media_icon_theme: String,
+    app_icon_theme: String
 }
 
 enum ButtonImage {
     Text(String),
     Svg(SvgHandle),
-    Png(DynamicImage)
+    Png(DynamicImage),
+    Blank
 }
 
 struct Button {
@@ -102,9 +111,15 @@ impl Button {
         if let Some(text) = cfg.text {
             Button::new_text(text, cfg.action)
         } else if let Some(icon) = cfg.icon {
-            Button::new_icon(&icon, cfg.action)
+            Button::new_icon(&icon, cfg.action, cfg.mode)
+        } else if let Some(mode) = cfg.mode {
+            if mode.to_lowercase() == "blank" {
+                Button::new_blank(cfg.action)
+            } else {
+                panic!("Invalid config, a button must have either Text, Svg, Png or be Blank")
+            }
         } else {
-            panic!("Invalid config, a button must have either Text, Svg or Png")
+            panic!("Invalid config, a button must have either Text, Svg, Png or be Blank")
         }
     }
     fn new_text(text: String, action: Key) -> Button {
@@ -115,9 +130,17 @@ impl Button {
             image: ButtonImage::Text(text)
         }
     }
-    fn new_icon(icon_name: &str, action: Key) -> Button {
+    fn new_icon(icon_name: &str, action: Key, mode: Option<String>) -> Button {
         let theme = load_theme();
-        let icon_theme = theme.media_icon_theme;
+        let icon_theme = match mode {
+            Some(mode_val) => {
+                if mode_val == "App" {theme.app_icon_theme} else {theme.media_icon_theme}
+            }
+            None => {
+                panic!("No mode specified")
+            }
+        };
+            
         let mut search_paths: Vec<PathBuf> = vec![
             PathBuf::from("/etc/tiny-dfr/icons"),
             PathBuf::from("/usr/share/tiny-dfr/icons/"),
@@ -128,18 +151,37 @@ impl Button {
         loader.set_search_paths(search_paths);
         loader.set_theme_name_provider(icon_theme);
         loader.update_theme_name().unwrap();
-        let icon_loader = loader.load_icon(icon_name).unwrap();
-        let icon = icon_loader.file_for_size(ICON_SIZE as u16);
         let image;
-        match icon.icon_type() {
-            IconFileType::SVG => {
-                image = ButtonImage::Svg(Loader::new().read_path(icon.path()).unwrap());
-            }
-            IconFileType::PNG => {
-                image = ButtonImage::Png(image::open(icon.path()).unwrap());
-            }
-            IconFileType::XPM => {
-                panic!("Legacy XPM icons are not supported")
+        match loader.load_icon(icon_name) {
+            Some(icon_loader) => {
+                let icon = icon_loader.file_for_size(ICON_SIZE as u16);
+                match icon.icon_type() {
+                    IconFileType::SVG => {
+                        image = ButtonImage::Svg(Loader::new().read_path(icon.path()).unwrap());
+                    }
+                    IconFileType::PNG => {
+                        image = ButtonImage::Png(image::open(icon.path()).unwrap());
+                    }
+                    IconFileType::XPM => {
+                        panic!("Legacy XPM icons are not supported")
+                    }
+                }
+            }    
+            None => {
+                // If loading the icon from the theme fails, try /usr/share/pixmaps
+
+                let icon_path_svg = Path::new("/usr/share/pixmaps").join(format!("{}.svg", icon_name));
+                let icon_path_png = Path::new("/usr/share/pixmaps").join(format!("{}.png", icon_name));
+
+
+                if icon_path_svg.exists() {
+                        image = ButtonImage::Svg(Loader::new().read_path(icon_path_svg).unwrap());
+                } else if icon_path_png.exists() {
+                        image = ButtonImage::Png(image::open(icon_path_png).unwrap());
+                } else {
+                    // If the icon is not found in /usr/share/pixmaps, use the icon_name as text
+                        image = ButtonImage::Text(icon_name.to_string());
+                }
             }
         }
         Button {
@@ -147,6 +189,14 @@ impl Button {
             active: false,
             changed: false,
             image,
+        }
+    }
+    fn new_blank(action: Key) -> Button {
+        Button {
+            action,
+            active: false,
+            changed: false,
+            image: ButtonImage::Blank,
         }
     }
     fn render(&self, c: &Context, height: f64, button_left_edge: f64, button_width: u64, y_shift: f64) {
@@ -212,6 +262,8 @@ impl Button {
                 // Composite the PNG surface onto the main context (the `c` context)
                 let _ = c.set_source_surface(&png_surface, x, y);
                 let _ = c.paint().expect("Failed to composite PNG image");
+            }
+            _ => {
             }
         }
     }
@@ -279,6 +331,21 @@ impl FunctionLayer {
                 c.rectangle(left_edge, bot - radius, button_width, top - bot + radius * 2.0);
                 c.fill().unwrap();
             }
+
+            if (button.action != Key::Unknown &&
+               button.action != Key::Macro1 &&
+               button.action != Key::Macro2 &&
+               button.action != Key::Macro3 &&
+               button.action != Key::Macro4) &&
+               ((button.action != Key::WWW &&
+                button.action != Key::AllApplications &&
+                button.action != Key::Calc &&
+                button.action != Key::File &&
+                button.action != Key::Prog1 &&
+                button.action != Key::Prog2 &&
+                button.action != Key::Prog3 &&
+                button.action != Key::Prog4) ||
+                button.active) {
             c.set_source_rgb(color, color, color);
             // draw box with rounded corners
             c.new_sub_path();
@@ -315,6 +382,7 @@ impl FunctionLayer {
             c.close_path();
 
             c.fill().unwrap();
+            }
             c.set_source_rgb(1.0, 1.0, 1.0);
             button.render(&c, height as f64, left_edge, button_width.ceil() as u64, pixel_shift_y);
 
@@ -398,9 +466,11 @@ fn load_theme() -> Theme {
         .and_then(|r| Ok(toml::from_str::<ConfigProxy>(&r)?));
     if let Ok(user) = user {
         base.media_icon_theme = user.media_icon_theme.or(base.media_icon_theme);
+        base.app_icon_theme = user.app_icon_theme.or(base.app_icon_theme);
     };
     Theme {
-        media_icon_theme: base.media_icon_theme.unwrap()
+        media_icon_theme: base.media_icon_theme.unwrap(),
+        app_icon_theme: base.app_icon_theme.unwrap()
     }
 }
 
@@ -410,16 +480,36 @@ fn load_config() -> Config {
         .and_then(|r| Ok(toml::from_str::<ConfigProxy>(&r)?));
     if let Ok(user) = user {
         base.media_layer_default = user.media_layer_default.or(base.media_layer_default);
+        base.special_extended_mode = user.special_extended_mode.or(base.special_extended_mode);
         base.show_button_outlines = user.show_button_outlines.or(base.show_button_outlines);
         base.enable_pixel_shift = user.enable_pixel_shift.or(base.enable_pixel_shift);
         base.font_template = user.font_template.or(base.font_template);
         base.media_layer_keys = user.media_layer_keys.or(base.media_layer_keys);
         base.primary_layer_keys = user.primary_layer_keys.or(base.primary_layer_keys);
+        base.app_layer_keys1 = user.app_layer_keys1.or(base.app_layer_keys1);
+        base.app_layer_keys2 = user.app_layer_keys2.or(base.app_layer_keys2);
+        base.app_layer_keys3 = user.app_layer_keys3.or(base.app_layer_keys3);
     };
     let media_layer = FunctionLayer::with_config(base.media_layer_keys.unwrap());
     let fkey_layer = FunctionLayer::with_config(base.primary_layer_keys.unwrap());
-    let layers = if base.media_layer_default.unwrap(){ [media_layer, fkey_layer] } else { [fkey_layer, media_layer] };
+    let app_layer1 = FunctionLayer::with_config(base.app_layer_keys1.unwrap());
+    let app_layer2 = FunctionLayer::with_config(base.app_layer_keys2.unwrap());
+    let app_layer3 = FunctionLayer::with_config(base.app_layer_keys3.unwrap());
+    let layers = if base.media_layer_default.unwrap() {
+            if base.special_extended_mode.unwrap() {
+                vec![app_layer1, fkey_layer, app_layer2, app_layer3]
+            } else {
+                vec![media_layer, fkey_layer]
+            }
+        } else {
+            if base.special_extended_mode.unwrap() {
+                vec![fkey_layer, app_layer1, app_layer2, app_layer3]
+            } else {
+                vec![fkey_layer, media_layer]
+            }
+        };
     Config {
+        media_layer_default: base.media_layer_default.unwrap(),
         show_button_outlines: base.show_button_outlines.unwrap(),
         enable_pixel_shift: base.enable_pixel_shift.unwrap(),
         font_face: load_font(&base.font_template.unwrap()),
@@ -559,6 +649,15 @@ fn main() {
                             active_layer = new_layer;
                             needs_complete_redraw = true;
                         }
+                        } else if key.key() == Key::Macro1 as u32 && key.key_state() == KeyState::Pressed {
+                            if cfg.media_layer_default {active_layer = 0;} else {active_layer = 1;}
+                            needs_complete_redraw = true;
+                        } else if key.key() == Key::Macro2 as u32 && key.key_state() == KeyState::Pressed {
+                            active_layer = 2;
+                            needs_complete_redraw = true;
+                        } else if key.key() == Key::Macro3 as u32 && key.key_state() == KeyState::Pressed {
+                            active_layer = 3;
+                            needs_complete_redraw = true;
                     }
                 },
                 Event::Touch(te) => {
