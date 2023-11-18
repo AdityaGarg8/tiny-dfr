@@ -23,6 +23,9 @@ EnablePixelShift = false
 # instead of 24hr
 Show24HrTime = true
 
+# Set this to the locale you want to use to display the time and date
+Locale = "en_US"
+
 # Set this to the fontconfig pattern to be used to pick a font for text labels
 # Some examples are:
 # "" - default regular sans-serif font

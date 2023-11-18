@@ -35,7 +35,7 @@ use privdrop::PrivDrop;
 use serde::Deserialize;
 use freetype::Library as FtLibrary;
 use icon_loader::{IconFileType, IconLoader};
-use chrono::{Local, Timelike};
+use chrono::{Local, Locale, Timelike};
 
 mod backlight;
 mod display;
@@ -65,6 +65,7 @@ struct ConfigProxy {
     media_icon_theme: Option<String>,
     app_icon_theme: Option<String>,
     show_24_hr_time: Option<bool>,
+    locale: Option<String>,
     primary_layer_keys: Option<Vec<ButtonConfig>>,
     media_layer_keys: Option<Vec<ButtonConfig>>,
     app_layer_keys1: Option<Vec<ButtonConfig>>,
@@ -95,7 +96,8 @@ struct Theme {
 }
 
 struct Time {
-    show_24_hr_time: bool
+    show_24_hr_time: bool,
+    locale: String
 }
 
 enum ButtonImage {
@@ -283,25 +285,26 @@ impl Button {
             ButtonImage::Time => {
                 let time = load_time();
                 let current_time = Local::now();
+                let current_locale = Locale::try_from(time.locale.as_str()).unwrap_or(Locale::POSIX);
                 let formatted_time; 
                 if time.show_24_hr_time {
                     formatted_time = format!(
                     "{}:{}    {} {} {}",
-                     current_time.format("%H"),
-                     current_time.format("%M"),
-                     current_time.format("%a"),
-                     current_time.format("%-e"),
-                     current_time.format("%b")
+                     current_time.format_localized("%H", current_locale),
+                     current_time.format_localized("%M", current_locale),
+                     current_time.format_localized("%a", current_locale),
+                     current_time.format_localized("%-e", current_locale),
+                     current_time.format_localized("%b", current_locale)
                 );
                 } else {
                     formatted_time = format!(
                     "{}:{} {}    {} {} {}",
-                    current_time.format("%-l"),
-                    current_time.format("%M"),
-                    current_time.format("%p"),
-                    current_time.format("%a"),
-                    current_time.format("%-e"),
-                    current_time.format("%b")
+                    current_time.format_localized("%-l", current_locale),
+                    current_time.format_localized("%M", current_locale),
+                    current_time.format_localized("%p", current_locale),
+                    current_time.format_localized("%a", current_locale),
+                    current_time.format_localized("%-e", current_locale),
+                    current_time.format_localized("%b", current_locale)
                 );
                 }
                 let time_extents = c.text_extents(&formatted_time).unwrap();
@@ -546,9 +549,11 @@ fn load_time() -> Time {
         .and_then(|r| Ok(toml::from_str::<ConfigProxy>(&r)?));
     if let Ok(user) = user {
         base.show_24_hr_time = user.show_24_hr_time.or(base.show_24_hr_time);
+        base.locale = user.locale.or(base.locale);
     };
     Time {
-        show_24_hr_time: base.show_24_hr_time.unwrap()
+        show_24_hr_time: base.show_24_hr_time.unwrap(),
+        locale: base.locale.unwrap()
     }
 }
 
