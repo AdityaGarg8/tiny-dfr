@@ -11,7 +11,7 @@ use std::{
     mem
 };
 use std::os::fd::AsFd;
-use cairo::{ImageSurface, Format, Context, Surface, Rectangle, FontFace};
+use cairo::{ImageSurface, Format, Context, Surface, Rectangle, FontSlant, FontWeight, FontFace};
 use rsvg::{Loader, CairoRenderer, SvgHandle};
 use image::{
         DynamicImage, Pixel,
@@ -61,6 +61,10 @@ struct ConfigProxy {
     special_extended_mode: Option<bool>,
     show_button_outlines: Option<bool>,
     enable_pixel_shift: Option<bool>,
+    font_renderer: Option<String>,
+    font_style: Option<String>,
+    bold: Option<bool>,
+    italic: Option<bool>,
     font_template: Option<String>,
     media_icon_theme: Option<String>,
     app_icon_theme: Option<String>,
@@ -86,6 +90,10 @@ struct Config {
     media_layer_default: bool,
     show_button_outlines: bool,
     enable_pixel_shift: bool,
+    font_renderer: String,
+    font_style_cairo: String,
+    bold_cairo: bool,
+    italic_cairo: bool,
     font_face: FontFace,
     layers: Vec<FunctionLayer>
 }
@@ -362,7 +370,11 @@ impl FunctionLayer {
             c.set_source_rgb(0.0, 0.0, 0.0);
             c.paint().unwrap();
         }
-        c.set_font_face(&config.font_face);
+        if config.font_renderer.to_lowercase() == "cairo" {
+            c.select_font_face(&config.font_style_cairo, if config.italic_cairo {FontSlant::Italic} else {FontSlant::Normal}, if config.bold_cairo {FontWeight::Bold} else {FontWeight::Normal});
+        } else if config.font_renderer.to_lowercase() == "freetype" {
+            c.set_font_face(&config.font_face);
+        } else { panic!("Invalid font renderer chosen. Choose between \"Cairo\" and \"FreeType\""); }
         c.set_font_size(32.0);
         for (i, button) in self.buttons.iter_mut().enumerate() {
             if !button.changed && !complete_redraw {
@@ -566,6 +578,10 @@ fn load_config() -> Config {
         base.special_extended_mode = user.special_extended_mode.or(base.special_extended_mode);
         base.show_button_outlines = user.show_button_outlines.or(base.show_button_outlines);
         base.enable_pixel_shift = user.enable_pixel_shift.or(base.enable_pixel_shift);
+        base.font_renderer = user.font_renderer.or(base.font_renderer);
+        base.font_style = user.font_style.or(base.font_style);
+        base.bold = user.bold.or(base.bold);
+        base.italic = user.italic.or(base.italic);
         base.font_template = user.font_template.or(base.font_template);
         base.media_layer_keys = user.media_layer_keys.or(base.media_layer_keys);
         base.primary_layer_keys = user.primary_layer_keys.or(base.primary_layer_keys);
@@ -595,6 +611,10 @@ fn load_config() -> Config {
         media_layer_default: base.media_layer_default.unwrap(),
         show_button_outlines: base.show_button_outlines.unwrap(),
         enable_pixel_shift: base.enable_pixel_shift.unwrap(),
+        font_renderer: base.font_renderer.unwrap(),
+        font_style_cairo: base.font_style.unwrap(),
+        bold_cairo: base.bold.unwrap(),
+        italic_cairo: base.italic.unwrap(),
         font_face: load_font(&base.font_template.unwrap()),
         layers
     }
