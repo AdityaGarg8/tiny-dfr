@@ -12,7 +12,7 @@ use std::{
 use cairo::{ImageSurface, Format, Context, Surface, Rectangle, FontFace, Antialias};
 use rsvg::{Loader, CairoRenderer, SvgHandle};
 use drm::control::ClipRect;
-use anyhow::{Error, Result};
+use anyhow::{Error, Result, anyhow};
 use input::{
     Libinput, LibinputInterface, Device as InputDevice,
     event::{
@@ -58,12 +58,17 @@ const USER_CFG_PATH: &'static str = "/etc/tiny-dfr/config.toml";
 #[serde(rename_all = "PascalCase")]
 struct ConfigProxy {
     media_layer_default: Option<bool>,
+    special_extended_mode: Option<bool>,
     show_button_outlines: Option<bool>,
     enable_pixel_shift: Option<bool>,
     font_template: Option<String>,
     media_icon_theme: Option<String>,
+    app_icon_theme: Option<String>,
     primary_layer_keys: Option<Vec<ButtonConfig>>,
-    media_layer_keys: Option<Vec<ButtonConfig>>
+    media_layer_keys: Option<Vec<ButtonConfig>>,
+    app_layer_keys1: Option<Vec<ButtonConfig>>,
+    app_layer_keys2: Option<Vec<ButtonConfig>>,
+    app_layer_keys3: Option<Vec<ButtonConfig>>
 }
 
 #[derive(Deserialize)]
@@ -71,11 +76,13 @@ struct ConfigProxy {
 struct ButtonConfig {
     #[serde(alias = "Svg")]
     icon: Option<String>,
+    mode: Option<String>,
     text: Option<String>,
     action: Key
 }
 
 struct Config {
+    media_layer_default: bool,
     show_button_outlines: bool,
     enable_pixel_shift: bool,
     font_face: FontFace,
@@ -83,12 +90,14 @@ struct Config {
 
 struct Theme {
     media_icon_theme: String,
+    app_icon_theme: String
 }
 
 enum ButtonImage {
     Text(String),
     Svg(SvgHandle),
-    Bitmap(ImageSurface)
+    Bitmap(ImageSurface),
+    Blank
 }
 
 struct Button {
@@ -98,9 +107,17 @@ struct Button {
     action: Key
 }
 
-fn load_image(path: &str) -> Result<ButtonImage> {
+fn load_image(path: &str, mode: Option<String>) -> Result<ButtonImage> {
     let theme = load_theme();
-    let icon_theme = theme.media_icon_theme;
+        let icon_theme = match mode {
+            Some(mode_val) => {
+                if mode_val == "App" {theme.app_icon_theme} else {theme.media_icon_theme}
+            }
+            None => {
+                panic!("No mode specified")
+            }
+        };
+
     let mut search_paths: Vec<PathBuf> = vec![
         PathBuf::from("/etc/tiny-dfr/icons"),
         PathBuf::from("/usr/share/tiny-dfr/icons/"),
@@ -111,8 +128,11 @@ fn load_image(path: &str) -> Result<ButtonImage> {
     loader.set_search_paths(search_paths);
     loader.set_theme_name_provider(icon_theme);
     loader.update_theme_name().unwrap();
-    let icon_loader = loader.load_icon(path).unwrap();
-    let icon = icon_loader.file_for_size(48);
+    let icon_loader = match loader.load_icon(path) {
+        Some(icon) => icon,
+        None => return Err(anyhow!("Icon not found: {}, trying /usr/share/pixmaps", path)),
+    };
+    let icon = icon_loader.file_for_size(256);
     match icon.icon_type() {
         IconFileType::SVG => {
             let handle = Loader::new().read_path(icon.path())?;
@@ -138,14 +158,40 @@ fn load_image(path: &str) -> Result<ButtonImage> {
     }
 }
 
+fn try_load_svg_pixmap(path: &str) -> Result<ButtonImage> {
+    let handle = Loader::new().read_path(format!("/usr/share/pixmaps/{}.svg", path))?;
+    Ok(ButtonImage::Svg(handle))
+}
+
+fn try_load_png_pixmap(path: &str) -> Result<ButtonImage> {
+    let mut file = File::open(format!("/usr/share/pixmaps/{}.png", path))?;
+    let surf = ImageSurface::create_from_png(&mut file)?;
+    if surf.height() == ICON_SIZE && surf.width() == ICON_SIZE {
+        return Ok(ButtonImage::Bitmap(surf));
+    }
+    let resized = ImageSurface::create(Format::ARgb32, ICON_SIZE, ICON_SIZE).unwrap();
+    let c = Context::new(&resized).unwrap();
+    c.scale(ICON_SIZE as f64 / surf.width() as f64, ICON_SIZE as f64 / surf.height() as f64);
+    c.set_source_surface(surf, 0.0, 0.0).unwrap();
+    c.set_antialias(Antialias::Best);
+    c.paint().unwrap();
+    return Ok(ButtonImage::Bitmap(resized));
+}
+
 impl Button {
     fn with_config(cfg: ButtonConfig) -> Button {
         if let Some(text) = cfg.text {
             Button::new_text(text, cfg.action)
         } else if let Some(icon) = cfg.icon {
-            Button::new_icon(&icon, cfg.action)
+            Button::new_icon(&icon, cfg.action, cfg.mode)
+        } else if let Some(mode) = cfg.mode {
+            if mode.to_lowercase() == "blank" {
+                Button::new_blank(cfg.action)
+            } else {
+                panic!("Invalid config, a button must have either Text, Icon or be Blank")
+            }
         } else {
-            panic!("Invalid config, a button must have either Text or Icon")
+            panic!("Invalid config, a button must have either Text, Icon or be Blank")
         }
     }
     fn new_text(text: String, action: Key) -> Button {
@@ -156,12 +202,23 @@ impl Button {
             image: ButtonImage::Text(text)
         }
     }
-    fn new_icon(path: &str, action: Key) -> Button {
-        let image = load_image(path).unwrap();
+    fn new_icon(path: &str, action: Key, mode: Option<String>) -> Button {
+        let image = load_image(path, mode)
+            .or_else(|_| try_load_svg_pixmap(path))
+            .or_else(|_| try_load_png_pixmap(path))
+            .unwrap_or_else(|_| ButtonImage::Text(path.to_string()));
         Button {
             action, image,
             active: false,
             changed: false,
+        }
+    }
+    fn new_blank(action: Key) -> Button {
+        Button {
+            action,
+            active: false,
+            changed: false,
+            image: ButtonImage::Blank,
         }
     }
     fn render(&self, c: &Context, height: i32, button_left_edge: f64, button_width: u64, y_shift: f64) {
@@ -189,6 +246,8 @@ impl Button {
                 c.set_source_surface(surf, x, y).unwrap();
                 c.rectangle(x, y, ICON_SIZE as f64, ICON_SIZE as f64);
                 c.fill().unwrap();
+            }
+            _ => {
             }
         }
     }
@@ -256,6 +315,21 @@ impl FunctionLayer {
                 c.rectangle(left_edge, bot - radius, button_width, top - bot + radius * 2.0);
                 c.fill().unwrap();
             }
+
+            if (button.action != Key::Unknown &&
+               button.action != Key::Macro1 &&
+               button.action != Key::Macro2 &&
+               button.action != Key::Macro3 &&
+               button.action != Key::Macro4) &&
+               ((button.action != Key::WWW &&
+                button.action != Key::AllApplications &&
+                button.action != Key::Calc &&
+                button.action != Key::File &&
+                button.action != Key::Prog1 &&
+                button.action != Key::Prog2 &&
+                button.action != Key::Prog3 &&
+                button.action != Key::Prog4) ||
+                button.active) {
             c.set_source_rgb(color, color, color);
             // draw box with rounded corners
             c.new_sub_path();
@@ -292,6 +366,7 @@ impl FunctionLayer {
             c.close_path();
 
             c.fill().unwrap();
+            }
             c.set_source_rgb(1.0, 1.0, 1.0);
             button.render(&c, height, left_edge, button_width.ceil() as u64, pixel_shift_y);
 
@@ -375,27 +450,48 @@ fn load_theme() -> Theme {
         .and_then(|r| Ok(toml::from_str::<ConfigProxy>(&r)?));
     if let Ok(user) = user {
         base.media_icon_theme = user.media_icon_theme.or(base.media_icon_theme);
+        base.app_icon_theme = user.app_icon_theme.or(base.app_icon_theme);
     };
     Theme {
-        media_icon_theme: base.media_icon_theme.unwrap()
+        media_icon_theme: base.media_icon_theme.unwrap(),
+        app_icon_theme: base.app_icon_theme.unwrap()
     }
 }
 
-fn load_config(width: u16) -> (Config, [FunctionLayer; 2]) {
+fn load_config(width: u16) -> (Config, Vec<FunctionLayer>) {
     let mut base = toml::from_str::<ConfigProxy>(&read_to_string("/usr/share/tiny-dfr/config.toml").unwrap()).unwrap();
     let user = read_to_string(USER_CFG_PATH).map_err::<Error, _>(|e| e.into())
         .and_then(|r| Ok(toml::from_str::<ConfigProxy>(&r)?));
     if let Ok(user) = user {
         base.media_layer_default = user.media_layer_default.or(base.media_layer_default);
+        base.special_extended_mode = user.special_extended_mode.or(base.special_extended_mode);
         base.show_button_outlines = user.show_button_outlines.or(base.show_button_outlines);
         base.enable_pixel_shift = user.enable_pixel_shift.or(base.enable_pixel_shift);
         base.font_template = user.font_template.or(base.font_template);
         base.media_layer_keys = user.media_layer_keys.or(base.media_layer_keys);
         base.primary_layer_keys = user.primary_layer_keys.or(base.primary_layer_keys);
+        base.app_layer_keys1 = user.app_layer_keys1.or(base.app_layer_keys1);
+        base.app_layer_keys2 = user.app_layer_keys2.or(base.app_layer_keys2);
+        base.app_layer_keys3 = user.app_layer_keys3.or(base.app_layer_keys3);
     };
     let media_layer = FunctionLayer::with_config(base.media_layer_keys.unwrap());
     let fkey_layer = FunctionLayer::with_config(base.primary_layer_keys.unwrap());
-    let mut layers = if base.media_layer_default.unwrap(){ [media_layer, fkey_layer] } else { [fkey_layer, media_layer] };
+    let app_layer1 = FunctionLayer::with_config(base.app_layer_keys1.unwrap());
+    let app_layer2 = FunctionLayer::with_config(base.app_layer_keys2.unwrap());
+    let app_layer3 = FunctionLayer::with_config(base.app_layer_keys3.unwrap());
+    let mut layers = if base.media_layer_default.unwrap() {
+            if base.special_extended_mode.unwrap() {
+                vec![app_layer1, fkey_layer, app_layer2, app_layer3]
+            } else {
+                vec![media_layer, fkey_layer]
+            }
+        } else {
+            if base.special_extended_mode.unwrap() {
+                vec![fkey_layer, app_layer1, app_layer2, app_layer3]
+            } else {
+                vec![fkey_layer, media_layer]
+            }
+        };
 
     if width >= 2170 {
         for layer in &mut layers {
@@ -404,6 +500,7 @@ fn load_config(width: u16) -> (Config, [FunctionLayer; 2]) {
     }
 
     let cfg = Config {
+        media_layer_default: base.media_layer_default.unwrap(),
         show_button_outlines: base.show_button_outlines.unwrap(),
         enable_pixel_shift: base.enable_pixel_shift.unwrap(),
         font_face: load_font(&base.font_template.unwrap()),
@@ -561,6 +658,15 @@ fn real_main(drm: &mut DrmBackend) {
                             active_layer = new_layer;
                             needs_complete_redraw = true;
                         }
+                        } else if key.key() == Key::Macro1 as u32 && key.key_state() == KeyState::Pressed {
+                            if cfg.media_layer_default {active_layer = 0;} else {active_layer = 1;}
+                            needs_complete_redraw = true;
+                        } else if key.key() == Key::Macro2 as u32 && key.key_state() == KeyState::Pressed {
+                            active_layer = 2;
+                            needs_complete_redraw = true;
+                        } else if key.key() == Key::Macro3 as u32 && key.key_state() == KeyState::Pressed {
+                            active_layer = 3;
+                            needs_complete_redraw = true;
                     }
                 },
                 Event::Touch(te) => {

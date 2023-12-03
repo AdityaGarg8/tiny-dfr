@@ -6,6 +6,10 @@
 # Set this to true if you want the media keys to be shown without Fn pressed
 MediaLayerDefault = false
 
+# Set this to true if you want to show app shortcuts, date and time and other
+# extended features in the Media layer.
+SpecialExtendedMode = false
+
 # Set this to false if you want to hide the button outline,
 # leaving only the text/logo
 ShowButtonOutlines = true
@@ -27,6 +31,11 @@ FontTemplate = ":bold"
 # Set this to the icon theme you want to use for Media controls.
 # Theme can be from "/usr/share/tiny-dfr/icons", "/etc/tiny-dfr/icons" or "/usr/share/icons"
 MediaIconTheme = "tiny-dfr-icons"
+
+
+# Set this to the icon theme you want to use for App icons.
+# Theme can be from "/usr/share/tiny-dfr/icons", "/etc/tiny-dfr/icons" or "/usr/share/icons"
+AppIconTheme = "hicolor"
 
 # This key defines the contents of the primary layer
 # (the one with F{number} keys)
@@ -63,17 +72,69 @@ PrimaryLayerKeys = [
 
 # This key defines the contents of the media key layer
 MediaLayerKeys = [
-    { Icon = "display-brightness-low-symbolic",   Action = "BrightnessDown" },
-    { Icon = "display-brightness-high-symbolic",  Action = "BrightnessUp"   },
-    { Icon = "microphone-disabled-symbolic",      Action = "MicMute"        },
-    { Icon = "system-search-symbolic",            Action = "Search"         },
-    { Icon = "keyboard-brightness-low-symbolic",  Action = "IllumDown"      },
-    { Icon = "keyboard-brightness-high-symbolic", Action = "IllumUp"        },
-    { Icon = "media-seek-backward-symbolic",      Action = "PreviousSong"   },
-    { Icon = "media-playback-start-symbolic",     Action = "PlayPause"      },
-    { Icon = "media-seek-forward-symbolic",       Action = "NextSong"       },
-    { Icon = "audio-volume-muted-symbolic",       Action = "Mute"           },
-    { Icon = "audio-volume-low-symbolic",         Action = "VolumeDown"     },
-    { Icon = "audio-volume-high-symbolic",        Action = "VolumeUp"       }
+    { Icon = "display-brightness-low-symbolic",   Action = "BrightnessDown", Mode = "Media"},
+    { Icon = "display-brightness-high-symbolic",  Action = "BrightnessUp",   Mode = "Media"},
+    { Icon = "microphone-disabled-symbolic",      Action = "MicMute",        Mode = "Media"},
+    { Icon = "system-search-symbolic",            Action = "Search",         Mode = "Media"},
+    { Icon = "keyboard-brightness-low-symbolic",  Action = "IllumDown",      Mode = "Media"},
+    { Icon = "keyboard-brightness-high-symbolic", Action = "IllumUp",        Mode = "Media"},
+    { Icon = "media-seek-backward-symbolic",      Action = "PreviousSong",   Mode = "Media"},
+    { Icon = "media-playback-start-symbolic",     Action = "PlayPause",      Mode = "Media"},
+    { Icon = "media-seek-forward-symbolic",       Action = "NextSong",       Mode = "Media"},
+    { Icon = "audio-volume-muted-symbolic",       Action = "Mute",           Mode = "Media"},
+    { Icon = "audio-volume-low-symbolic",         Action = "VolumeDown",     Mode = "Media"},
+    { Icon = "audio-volume-high-symbolic",        Action = "VolumeUp",       Mode = "Media"}
 ]
 
+# This key defines the contents of the main app key layer
+# Macro1 key switches to AppLayerKeys1
+# Macro2 key switches to AppLayerKeys2
+# Macro3 key switches to AppLayerKeys3
+AppLayerKeys1 = [
+    { Icon = "app1",                          Action = "Prog1",      Mode = "App"},
+    { Icon = "app2",                          Action = "Prog2",      Mode = "App"},
+    { Icon = "app3",                          Action = "Prog3",      Mode = "App"},
+    { Icon = "app4",                          Action = "Prog4",      Mode = "App"},
+    { Icon = "go-next-symbolic",              Action = "Macro2",     Mode = "Media"},
+    { Action = "Unknown", Mode = "Blank"},
+    { Action = "Unknown", Mode = "Blank"},
+    { Action = "Unknown", Mode = "Blank"},
+    { Icon = "audio-volume-low-symbolic",     Action = "VolumeDown", Mode = "Media"},
+    { Icon = "audio-volume-high-symbolic",    Action = "VolumeUp",   Mode = "Media"},
+    { Icon = "media-playback-start-symbolic", Action = "PlayPause",  Mode = "Media"},
+    { Icon = "system-search-symbolic",        Action = "Search",     Mode = "Media"},
+    { Icon = "go-next-symbolic",              Action = "Macro3",     Mode = "Media"}
+]
+
+# This key defines the contents of the app key layer showing additional apps
+AppLayerKeys2 = [
+    { Icon = "go-previous-symbolic",            Action = "Macro1",          Mode = "Media"},
+    { Icon = "web-browser-symbolic",            Action = "WWW",             Mode = "Media"},
+    { Icon = "accessories-calculator-symbolic", Action = "Calc",            Mode = "Media"},
+    { Icon = "system-file-manager-symbolic",    Action = "File",            Mode = "Media"},
+    { Icon = "view-app-grid-symbolic",          Action = "AllApplications", Mode = "Media"},
+    { Action = "Unknown", Mode = "Blank"},
+    { Action = "Unknown", Mode = "Blank"},
+    { Action = "Unknown", Mode = "Blank"},
+    { Icon = "audio-volume-low-symbolic",       Action = "VolumeDown",      Mode = "Media"},
+    { Icon = "audio-volume-high-symbolic",      Action = "VolumeUp",        Mode = "Media"},
+    { Icon = "media-playback-start-symbolic",   Action = "PlayPause",       Mode = "Media"},
+    { Icon = "system-search-symbolic",          Action = "Search",          Mode = "Media"},
+    { Icon = "go-next-symbolic",                Action = "Macro3",          Mode = "Media"}
+]
+
+# This key defines the contents of the app key layer showing all media icons
+AppLayerKeys3 = [
+    { Icon = "go-previous-symbolic",              Action = "Macro1",         Mode = "Media"},
+    { Icon = "display-brightness-low-symbolic",   Action = "BrightnessDown", Mode = "Media"},
+    { Icon = "display-brightness-high-symbolic",  Action = "BrightnessUp",   Mode = "Media"},
+    { Icon = "microphone-disabled-symbolic",      Action = "MicMute",        Mode = "Media"},
+    { Icon = "keyboard-brightness-low-symbolic",  Action = "IllumDown",      Mode = "Media"},
+    { Icon = "keyboard-brightness-high-symbolic", Action = "IllumUp",        Mode = "Media"},
+    { Icon = "media-seek-backward-symbolic",      Action = "PreviousSong",   Mode = "Media"},
+    { Icon = "media-playback-start-symbolic",     Action = "PlayPause",      Mode = "Media"},
+    { Icon = "media-seek-forward-symbolic",       Action = "NextSong",       Mode = "Media"},
+    { Icon = "audio-volume-muted-symbolic",       Action = "Mute",           Mode = "Media"},
+    { Icon = "audio-volume-low-symbolic",         Action = "VolumeDown",     Mode = "Media"},
+    { Icon = "audio-volume-high-symbolic",        Action = "VolumeUp",       Mode = "Media"}
+]
