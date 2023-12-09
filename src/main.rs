@@ -140,9 +140,28 @@ fn load_image(path: &str, mode: Option<String>) -> Result<ButtonImage> {
     loader.set_search_paths(search_paths);
     loader.set_theme_name_provider(icon_theme);
     loader.update_theme_name().unwrap();
-    let icon_loader = match loader.load_icon(path) {
-        Some(icon) => icon,
-        None => return Err(anyhow!("Icon not found: {}, trying /usr/share/pixmaps", path)),
+    let icon_loader;
+    match loader.load_icon(path) {
+        Some(icon) => {
+            icon_loader = icon;
+        }
+        None => {
+            match loader.load_icon(format!("{}.svg", path)) {
+                Some(icon) => {
+                    icon_loader = icon;
+                }
+                None => {
+                    match loader.load_icon(format!("{}.png", path)) {
+                        Some(icon) => {
+                            icon_loader = icon;
+                        }
+                        None => {
+                            return Err(anyhow!("Icon not found: {}, trying /usr/share/pixmaps", path));
+                        }
+                    }
+                }
+            }
+        }
     };
     let icon = icon_loader.file_for_size(256);
     match icon.icon_type() {
