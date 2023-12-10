@@ -81,6 +81,7 @@ struct ConfigProxy {
 struct ButtonConfig {
     #[serde(alias = "Svg")]
     icon: Option<String>,
+    path: Option<String>,
     mode: Option<String>,
     text: Option<String>,
     format: Option<String>,
@@ -119,7 +120,10 @@ struct Button {
     action: Key
 }
 
-fn load_image(path: &str, mode: Option<String>) -> Result<ButtonImage> {
+fn load_image(icon_name: &str, mode: Option<String>, path: &str) -> Result<ButtonImage> {
+    if path != "use_default" {
+        return Err(anyhow!("Custom path defined, using that"));
+    }
     let theme = load_theme();
         let icon_theme = match mode {
             Some(mode_val) => {
@@ -141,22 +145,22 @@ fn load_image(path: &str, mode: Option<String>) -> Result<ButtonImage> {
     loader.set_theme_name_provider(icon_theme);
     loader.update_theme_name().unwrap();
     let icon_loader;
-    match loader.load_icon(path) {
+    match loader.load_icon(icon_name) {
         Some(icon) => {
             icon_loader = icon;
         }
         None => {
-            match loader.load_icon(format!("{}.svg", path)) {
+            match loader.load_icon(format!("{}.svg", icon_name)) {
                 Some(icon) => {
                     icon_loader = icon;
                 }
                 None => {
-                    match loader.load_icon(format!("{}.png", path)) {
+                    match loader.load_icon(format!("{}.png", icon_name)) {
                         Some(icon) => {
                             icon_loader = icon;
                         }
                         None => {
-                            return Err(anyhow!("Icon not found: {}, trying /usr/share/pixmaps", path));
+                            return Err(anyhow!("Icon not found: {}, trying /usr/share/pixmaps", icon_name));
                         }
                     }
                 }
@@ -189,13 +193,17 @@ fn load_image(path: &str, mode: Option<String>) -> Result<ButtonImage> {
     }
 }
 
-fn try_load_svg_pixmap(path: &str) -> Result<ButtonImage> {
-    let handle = Loader::new().read_path(format!("/usr/share/pixmaps/{}.svg", path))?;
+fn try_load_svg_path(icon_name: &str, path: &str) -> Result<ButtonImage> {
+    let handle = Loader::new().read_path(format!("{}", path)).or_else(|_| {
+        Loader::new().read_path(format!("/usr/share/pixmaps/{}.svg", icon_name))
+    })?;
     Ok(ButtonImage::Svg(handle))
 }
 
-fn try_load_png_pixmap(path: &str) -> Result<ButtonImage> {
-    let mut file = File::open(format!("/usr/share/pixmaps/{}.png", path))?;
+fn try_load_png_path(icon_name: &str, path: &str) -> Result<ButtonImage> {
+    let mut file = File::open(format!("{}", path)).or_else(|_| {
+        File::open(format!("/usr/share/pixmaps/{}.png", icon_name))
+    })?;
     let surf = ImageSurface::create_from_png(&mut file)?;
     if surf.height() == ICON_SIZE && surf.width() == ICON_SIZE {
         return Ok(ButtonImage::Bitmap(surf));
@@ -214,7 +222,11 @@ impl Button {
         if let Some(text) = cfg.text {
             Button::new_text(text, cfg.action)
         } else if let Some(icon) = cfg.icon {
-            Button::new_icon(&icon, cfg.action, cfg.mode)
+            let path = match cfg.path {
+                Some(p) => p,
+                None => "use_default".to_string()
+            };
+            Button::new_icon(&icon, cfg.action, cfg.mode, &path)
         } else if let Some(mode) = cfg.mode {
             if mode.to_lowercase() == "blank" {
                 Button::new_blank(cfg.action)
@@ -243,11 +255,11 @@ impl Button {
             image: ButtonImage::Text(text)
         }
     }
-    fn new_icon(path: &str, action: Key, mode: Option<String>) -> Button {
-        let image = load_image(path, mode)
-            .or_else(|_| try_load_svg_pixmap(path))
-            .or_else(|_| try_load_png_pixmap(path))
-            .unwrap_or_else(|_| ButtonImage::Text(path.to_string()));
+    fn new_icon(icon_name: &str, action: Key, mode: Option<String>, path: &str) -> Button {
+        let image = load_image(icon_name, mode, path)
+            .or_else(|_| try_load_svg_path(icon_name, path))
+            .or_else(|_| try_load_png_path(icon_name, path))
+            .unwrap_or_else(|_| ButtonImage::Text(icon_name.to_string()));
         Button {
             action, image,
             active: false,
