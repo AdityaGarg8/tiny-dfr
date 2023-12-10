@@ -69,6 +69,8 @@ PrimaryLayerKeys = [
     # at this location
     # Mode = app will use AppIconTheme, Media will use MediaIconTheme for icons,
     # unless Path is specified.
+    # You can also add Background = true or Background = false to show or
+    # hide the button outline for individual buttons.
     # Only one of Text or Icon is allowed,
     # if both are present, the behavior is undefined.
     # For the list of supported key codes see
