@@ -24,6 +24,10 @@ pub struct Config {
     pub active_brightness: u32,
 }
 
+pub struct Theme {
+    pub media_icon_theme: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ConfigProxy {
@@ -31,6 +35,7 @@ struct ConfigProxy {
     show_button_outlines: Option<bool>,
     enable_pixel_shift: Option<bool>,
     font_template: Option<String>,
+    media_icon_theme: Option<String>,
     adaptive_brightness: Option<bool>,
     active_brightness: Option<u32>,
     primary_layer_keys: Option<Vec<ButtonConfig>>,
@@ -60,6 +65,18 @@ fn load_font(name: &str) -> FontFace {
     let ft_library = FtLibrary::init().unwrap();
     let face = ft_library.new_face(file_name, file_idx).unwrap();
     FontFace::create_from_ft(&face).unwrap()
+}
+
+fn load_theme() -> Theme {
+    let mut base = toml::from_str::<ConfigProxy>(&read_to_string("/usr/share/tiny-dfr/config.toml").unwrap()).unwrap();
+    let user = read_to_string("/etc/tiny-dfr/config.toml").map_err::<Error, _>(|e| e.into())
+        .and_then(|r| Ok(toml::from_str::<ConfigProxy>(&r)?));
+    if let Ok(user) = user {
+        base.media_icon_theme = user.media_icon_theme.or(base.media_icon_theme);
+    };
+    Theme {
+        media_icon_theme: base.media_icon_theme.unwrap()
+    }
 }
 
 fn load_config(width: u16) -> (Config, [FunctionLayer; 2]) {
@@ -120,6 +137,9 @@ impl ConfigManager {
     }
     pub fn load_config(&self, width: u16) -> (Config, [FunctionLayer; 2]) {
         load_config(width)
+    }
+    pub fn load_theme(&self) -> Theme {
+        load_theme()
     }
     pub fn update_config(&mut self, cfg: &mut Config, layers: &mut [FunctionLayer; 2], width: u16) -> bool {
         if self.watch_desc.is_none() {
