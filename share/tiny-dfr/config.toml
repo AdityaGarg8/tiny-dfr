@@ -24,6 +24,10 @@ EnablePixelShift = false
 # https://www.freedesktop.org/software/fontconfig/fontconfig-user.html
 FontTemplate = ":bold"
 
+# Set this to the icon theme you want to use for Media controls.
+# Theme can be from "/usr/share/tiny-dfr/icons", "/etc/tiny-dfr/icons" or "/usr/share/icons"
+MediaIconTheme = "tiny-dfr-icons"
+
 # Set this to false if you want the brightness of the touchbar
 # to be set to a static value instead of following the primary
 # screen's brightness
@@ -70,17 +74,17 @@ PrimaryLayerKeys = [
 
 # This key defines the contents of the media key layer
 MediaLayerKeys = [
-    { Icon = "brightness_low",  Action = "BrightnessDown" },
-    { Icon = "brightness_high", Action = "BrightnessUp"   },
-    { Icon = "mic_off",         Action = "MicMute"        },
-    { Icon = "search",          Action = "Search"         },
-    { Icon = "backlight_low",   Action = "IllumDown"      },
-    { Icon = "backlight_high",  Action = "IllumUp"        },
-    { Icon = "fast_rewind",     Action = "PreviousSong"   },
-    { Icon = "play_pause",      Action = "PlayPause"      },
-    { Icon = "fast_forward",    Action = "NextSong"       },
-    { Icon = "volume_off",      Action = "Mute"           },
-    { Icon = "volume_down",     Action = "VolumeDown"     },
-    { Icon = "volume_up",       Action = "VolumeUp"       }
+    { Icon = "display-brightness-low-symbolic",   Action = "BrightnessDown" },
+    { Icon = "display-brightness-high-symbolic",  Action = "BrightnessUp"   },
+    { Icon = "microphone-disabled-symbolic",      Action = "MicMute"        },
+    { Icon = "system-search-symbolic",            Action = "Search"         },
+    { Icon = "keyboard-brightness-low-symbolic",  Action = "IllumDown"      },
+    { Icon = "keyboard-brightness-high-symbolic", Action = "IllumUp"        },
+    { Icon = "media-seek-backward-symbolic",      Action = "PreviousSong"   },
+    { Icon = "media-playback-start-symbolic",     Action = "PlayPause"      },
+    { Icon = "media-seek-forward-symbolic",       Action = "NextSong"       },
+    { Icon = "audio-volume-muted-symbolic",       Action = "Mute"           },
+    { Icon = "audio-volume-low-symbolic",         Action = "VolumeDown"     },
+    { Icon = "audio-volume-high-symbolic",        Action = "VolumeUp"       }
 ]
 

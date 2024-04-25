@@ -4,7 +4,7 @@ use std::{
         fd::{AsRawFd, AsFd},
         unix::{io::OwnedFd, fs::OpenOptionsExt}
     },
-    path::Path,
+    path::{Path, PathBuf},
     collections::HashMap,
     cmp::min,
     panic::{self, AssertUnwindSafe}
@@ -32,6 +32,7 @@ use nix::{
     errno::Errno
 };
 use privdrop::PrivDrop;
+use icon_loader::{IconFileType, IconLoader};
 
 mod backlight;
 mod display;
@@ -64,28 +65,44 @@ struct Button {
     action: Key
 }
 
-fn try_load_svg(path: &str) -> Result<ButtonImage> {
-    let handle = Loader::new().read_path(format!("/etc/tiny-dfr/{}.svg", path)).or_else(|_| {
-        Loader::new().read_path(format!("/usr/share/tiny-dfr/{}.svg", path))
-    })?;
-    Ok(ButtonImage::Svg(handle))
-}
-
-fn try_load_png(path: &str) -> Result<ButtonImage> {
-    let mut file = File::open(format!("/etc/tiny-dfr/{}.png", path)).or_else(|_| {
-        File::open(format!("/usr/share/tiny-dfr/{}.png", path))
-    })?;
-    let surf = ImageSurface::create_from_png(&mut file)?;
-    if surf.height() == ICON_SIZE && surf.width() == ICON_SIZE {
-        return Ok(ButtonImage::Bitmap(surf));
+fn load_image(path: &str) -> Result<ButtonImage> {
+    let theme = ConfigManager::new().load_theme();
+    let icon_theme = theme.media_icon_theme;
+    let mut search_paths: Vec<PathBuf> = vec![
+        PathBuf::from("/etc/tiny-dfr/icons"),
+        PathBuf::from("/usr/share/tiny-dfr/icons/"),
+        PathBuf::from("/usr/share/icons/"),
+    ];
+    let mut loader = IconLoader::new();
+    search_paths.extend(loader.search_paths().into_owned());
+    loader.set_search_paths(search_paths);
+    loader.set_theme_name_provider(icon_theme);
+    loader.update_theme_name().unwrap();
+    let icon_loader = loader.load_icon(path).unwrap();
+    let icon = icon_loader.file_for_size(48);
+    match icon.icon_type() {
+        IconFileType::SVG => {
+            let handle = Loader::new().read_path(icon.path())?;
+            Ok(ButtonImage::Svg(handle))
+        }
+        IconFileType::PNG => {
+            let mut file = File::open(icon.path())?;
+            let surf = ImageSurface::create_from_png(&mut file)?;
+            if surf.height() == ICON_SIZE && surf.width() == ICON_SIZE {
+                return Ok(ButtonImage::Bitmap(surf));
+            }
+            let resized = ImageSurface::create(Format::ARgb32, ICON_SIZE, ICON_SIZE).unwrap();
+            let c = Context::new(&resized).unwrap();
+            c.scale(ICON_SIZE as f64 / surf.width() as f64, ICON_SIZE as f64 / surf.height() as f64);
+            c.set_source_surface(surf, 0.0, 0.0).unwrap();
+            c.set_antialias(Antialias::Best);
+            c.paint().unwrap();
+            return Ok(ButtonImage::Bitmap(resized));
+        }
+        IconFileType::XPM => {
+            panic!("Legacy XPM icons are not supported")
+        }
     }
-    let resized = ImageSurface::create(Format::ARgb32, ICON_SIZE, ICON_SIZE).unwrap();
-    let c = Context::new(&resized).unwrap();
-    c.scale(ICON_SIZE as f64 / surf.width() as f64, ICON_SIZE as f64 / surf.height() as f64);
-    c.set_source_surface(surf, 0.0, 0.0).unwrap();
-    c.set_antialias(Antialias::Best);
-    c.paint().unwrap();
-    return Ok(ButtonImage::Bitmap(resized));
 }
 
 impl Button {
@@ -107,7 +124,7 @@ impl Button {
         }
     }
     fn new_icon(path: &str, action: Key) -> Button {
-        let image = try_load_svg(path).or_else(|_| try_load_png(path)).unwrap();
+        let image = load_image(path).unwrap();
         Button {
             action, image,
             active: false,
