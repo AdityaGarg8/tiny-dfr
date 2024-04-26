@@ -148,8 +148,14 @@ impl Button {
             if mode.to_lowercase() == "blank" {
                 Button::new_blank(cfg.action)
             } else if mode.to_lowercase() == "time" {
-                let Some(format) = cfg.format else { panic!("Invalid config, time format is not defined for time key") };
-                let Some(locale) = cfg.locale else { panic!("Invalid config, time locale is not defined for time key") };
+                let format = match cfg.format {
+                    Some(f) => f,
+                    None => "24hr".to_string()
+                };
+                let locale = match cfg.locale {
+                    Some(l) => l,
+                    None => "POSIX".to_string()
+                };
                 Button::new_time(cfg.action, format, locale)
             } else {
                 panic!("Invalid config, a button must have either Text, Icon or be Blank")
