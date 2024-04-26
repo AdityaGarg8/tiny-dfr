@@ -20,6 +20,10 @@ pub struct Config {
     pub media_layer_default: bool,
     pub show_button_outlines: bool,
     pub enable_pixel_shift: bool,
+    pub font_renderer: String,
+    pub font_style_cairo: String,
+    pub bold_cairo: bool,
+    pub italic_cairo: bool,
     pub font_face: FontFace,
     pub adaptive_brightness: bool,
     pub active_brightness: u32,
@@ -37,6 +41,10 @@ struct ConfigProxy {
     special_extended_mode: Option<bool>,
     show_button_outlines: Option<bool>,
     enable_pixel_shift: Option<bool>,
+    font_renderer: Option<String>,
+    font_style: Option<String>,
+    bold: Option<bool>,
+    italic: Option<bool>,
     font_template: Option<String>,
     media_icon_theme: Option<String>,
     app_icon_theme: Option<String>,
@@ -99,6 +107,10 @@ fn load_config(width: u16) -> (Config, Vec<FunctionLayer>) {
         base.special_extended_mode = user.special_extended_mode.or(base.special_extended_mode);
         base.show_button_outlines = user.show_button_outlines.or(base.show_button_outlines);
         base.enable_pixel_shift = user.enable_pixel_shift.or(base.enable_pixel_shift);
+        base.font_renderer = user.font_renderer.or(base.font_renderer);
+        base.font_style = user.font_style.or(base.font_style);
+        base.bold = user.bold.or(base.bold);
+        base.italic = user.italic.or(base.italic);
         base.font_template = user.font_template.or(base.font_template);
         base.adaptive_brightness = user.adaptive_brightness.or(base.adaptive_brightness);
         base.media_layer_keys = user.media_layer_keys.or(base.media_layer_keys);
@@ -136,6 +148,10 @@ fn load_config(width: u16) -> (Config, Vec<FunctionLayer>) {
         show_button_outlines: base.show_button_outlines.unwrap(),
         enable_pixel_shift: base.enable_pixel_shift.unwrap(),
         adaptive_brightness: base.adaptive_brightness.unwrap(),
+        font_renderer: base.font_renderer.unwrap(),
+        font_style_cairo: base.font_style.unwrap(),
+        bold_cairo: base.bold.unwrap(),
+        italic_cairo: base.italic.unwrap(),
         font_face: load_font(&base.font_template.unwrap()),
         active_brightness: base.active_brightness.unwrap()
     };
