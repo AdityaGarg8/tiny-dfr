@@ -17,6 +17,7 @@ use serde::Deserialize;
 const USER_CFG_PATH: &'static str = "/etc/tiny-dfr/config.toml";
 
 pub struct Config {
+    pub media_layer_default: bool,
     pub show_button_outlines: bool,
     pub enable_pixel_shift: bool,
     pub font_face: FontFace,
@@ -26,20 +27,26 @@ pub struct Config {
 
 pub struct Theme {
     pub media_icon_theme: String,
+    pub app_icon_theme: String
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ConfigProxy {
     media_layer_default: Option<bool>,
+    special_extended_mode: Option<bool>,
     show_button_outlines: Option<bool>,
     enable_pixel_shift: Option<bool>,
     font_template: Option<String>,
     media_icon_theme: Option<String>,
+    app_icon_theme: Option<String>,
     adaptive_brightness: Option<bool>,
     active_brightness: Option<u32>,
     primary_layer_keys: Option<Vec<ButtonConfig>>,
-    media_layer_keys: Option<Vec<ButtonConfig>>
+    media_layer_keys: Option<Vec<ButtonConfig>>,
+    app_layer_keys1: Option<Vec<ButtonConfig>>,
+    app_layer_keys2: Option<Vec<ButtonConfig>>,
+    app_layer_keys3: Option<Vec<ButtonConfig>>
 }
 
 #[derive(Deserialize)]
@@ -47,6 +54,7 @@ struct ConfigProxy {
 pub struct ButtonConfig {
     #[serde(alias = "Svg")]
     pub icon: Option<String>,
+    pub mode: Option<String>,
     pub text: Option<String>,
     pub action: Key
 }
@@ -72,35 +80,57 @@ fn load_theme() -> Theme {
         .and_then(|r| Ok(toml::from_str::<ConfigProxy>(&r)?));
     if let Ok(user) = user {
         base.media_icon_theme = user.media_icon_theme.or(base.media_icon_theme);
+        base.app_icon_theme = user.app_icon_theme.or(base.app_icon_theme);
     };
     Theme {
-        media_icon_theme: base.media_icon_theme.unwrap()
+        media_icon_theme: base.media_icon_theme.unwrap(),
+        app_icon_theme: base.app_icon_theme.unwrap()
     }
 }
 
-fn load_config(width: u16) -> (Config, [FunctionLayer; 2]) {
+fn load_config(width: u16) -> (Config, Vec<FunctionLayer>) {
     let mut base = toml::from_str::<ConfigProxy>(&read_to_string("/usr/share/tiny-dfr/config.toml").unwrap()).unwrap();
     let user = read_to_string(USER_CFG_PATH).map_err::<Error, _>(|e| e.into())
         .and_then(|r| Ok(toml::from_str::<ConfigProxy>(&r)?));
     if let Ok(user) = user {
         base.media_layer_default = user.media_layer_default.or(base.media_layer_default);
+        base.special_extended_mode = user.special_extended_mode.or(base.special_extended_mode);
         base.show_button_outlines = user.show_button_outlines.or(base.show_button_outlines);
         base.enable_pixel_shift = user.enable_pixel_shift.or(base.enable_pixel_shift);
         base.font_template = user.font_template.or(base.font_template);
         base.adaptive_brightness = user.adaptive_brightness.or(base.adaptive_brightness);
         base.media_layer_keys = user.media_layer_keys.or(base.media_layer_keys);
         base.primary_layer_keys = user.primary_layer_keys.or(base.primary_layer_keys);
+        base.app_layer_keys1 = user.app_layer_keys1.or(base.app_layer_keys1);
+        base.app_layer_keys2 = user.app_layer_keys2.or(base.app_layer_keys2);
+        base.app_layer_keys3 = user.app_layer_keys3.or(base.app_layer_keys3);
         base.active_brightness = user.active_brightness.or(base.active_brightness);
     };
     let media_layer = FunctionLayer::with_config(base.media_layer_keys.unwrap());
     let fkey_layer = FunctionLayer::with_config(base.primary_layer_keys.unwrap());
-    let mut layers = if base.media_layer_default.unwrap(){ [media_layer, fkey_layer] } else { [fkey_layer, media_layer] };
+    let app_layer1 = FunctionLayer::with_config(base.app_layer_keys1.unwrap());
+    let app_layer2 = FunctionLayer::with_config(base.app_layer_keys2.unwrap());
+    let app_layer3 = FunctionLayer::with_config(base.app_layer_keys3.unwrap());
+    let mut layers = if base.media_layer_default.unwrap() {
+            if base.special_extended_mode.unwrap() {
+                vec![app_layer1, fkey_layer, app_layer2, app_layer3]
+            } else {
+                vec![media_layer, fkey_layer]
+            }
+        } else {
+            if base.special_extended_mode.unwrap() {
+                vec![fkey_layer, app_layer1, app_layer2, app_layer3]
+            } else {
+                vec![fkey_layer, media_layer]
+            }
+        };
     if width >= 2170 {
         for layer in &mut layers {
             layer.buttons.insert(0, Button::new_text("esc".to_string(), Key::Esc));
         }
     }
     let cfg = Config {
+        media_layer_default: base.media_layer_default.unwrap(),
         show_button_outlines: base.show_button_outlines.unwrap(),
         enable_pixel_shift: base.enable_pixel_shift.unwrap(),
         adaptive_brightness: base.adaptive_brightness.unwrap(),
@@ -132,13 +162,13 @@ impl ConfigManager {
             inotify_fd, watch_desc
         }
     }
-    pub fn load_config(&self, width: u16) -> (Config, [FunctionLayer; 2]) {
+    pub fn load_config(&self, width: u16) -> (Config, Vec<FunctionLayer>) {
         load_config(width)
     }
     pub fn load_theme(&self) -> Theme {
         load_theme()
     }
-    pub fn update_config(&mut self, cfg: &mut Config, layers: &mut [FunctionLayer; 2], width: u16) -> bool {
+    pub fn update_config(&mut self, cfg: &mut Config, layers: &mut Vec<FunctionLayer>, width: u16) -> bool {
         if self.watch_desc.is_none() {
             self.watch_desc = arm_inotify(&self.inotify_fd);
             return false;
