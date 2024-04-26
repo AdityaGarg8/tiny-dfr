@@ -56,6 +56,8 @@ pub struct ButtonConfig {
     pub icon: Option<String>,
     pub mode: Option<String>,
     pub text: Option<String>,
+    pub format: Option<String>,
+    pub locale: Option<String>,
     pub action: Key
 }
 
