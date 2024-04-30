@@ -65,6 +65,7 @@ pub struct ButtonConfig {
     pub path: Option<String>,
     pub mode: Option<String>,
     pub text: Option<String>,
+    pub background: Option<bool>,
     pub format: Option<String>,
     pub locale: Option<String>,
     pub action: Key
@@ -141,7 +142,7 @@ fn load_config(width: u16) -> (Config, Vec<FunctionLayer>) {
         };
     if width >= 2170 {
         for layer in &mut layers {
-            layer.buttons.insert(0, Button::new_text("esc".to_string(), Key::Esc));
+            layer.buttons.insert(0, Button::new_text("esc".to_string(), Key::Esc, true));
         }
     }
     let cfg = Config {
