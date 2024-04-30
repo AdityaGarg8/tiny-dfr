@@ -62,6 +62,7 @@ struct ConfigProxy {
 pub struct ButtonConfig {
     #[serde(alias = "Svg")]
     pub icon: Option<String>,
+    pub path: Option<String>,
     pub mode: Option<String>,
     pub text: Option<String>,
     pub format: Option<String>,
