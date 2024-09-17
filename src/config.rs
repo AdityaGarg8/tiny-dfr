@@ -62,6 +62,7 @@ struct ConfigProxy {
 pub struct ButtonConfig {
     #[serde(alias = "Svg")]
     pub icon: Option<String>,
+    pub path: Option<String>,
     pub mode: Option<String>,
     pub text: Option<String>,
     pub format: Option<String>,
@@ -139,6 +140,7 @@ fn load_config(width: u16) -> (Config, Vec<FunctionLayer>) {
         for layer in layers_vec.iter_mut() {
             layer.insert(0, ButtonConfig { 
                 icon: None,
+                path: None,
                 mode: None,
                 format: None,
                 locale: None,
