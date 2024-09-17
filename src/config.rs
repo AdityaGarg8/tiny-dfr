@@ -56,6 +56,8 @@ pub struct ButtonConfig {
     pub icon: Option<String>,
     pub mode: Option<String>,
     pub text: Option<String>,
+    pub format: Option<String>,
+    pub locale: Option<String>,
     pub action: Key,
     pub stretch: Option<usize>,
 }
@@ -126,6 +128,8 @@ fn load_config(width: u16) -> (Config, Vec<FunctionLayer>) {
             layer.insert(0, ButtonConfig { 
                 icon: None,
                 mode: None,
+                format: None,
+                locale: None,
                 text: Some("esc".into()),
                 action: Key::Esc,
                 stretch: None
