@@ -9,7 +9,7 @@ use std::{
     cmp::min,
     panic::{self, AssertUnwindSafe}
 };
-use cairo::{ImageSurface, Format, Context, Surface, Rectangle, Antialias};
+use cairo::{ImageSurface, Format, Context, Surface, Rectangle, FontSlant, FontWeight, Antialias};
 use rsvg::{Loader, CairoRenderer, SvgHandle};
 use drm::control::ClipRect;
 use anyhow::{Result, anyhow};
@@ -311,7 +311,11 @@ impl FunctionLayer {
             c.set_source_rgb(0.0, 0.0, 0.0);
             c.paint().unwrap();
         }
-        c.set_font_face(&config.font_face);
+        if config.font_renderer.to_lowercase() == "cairo" {
+            c.select_font_face(&config.font_style_cairo, if config.italic_cairo {FontSlant::Italic} else {FontSlant::Normal}, if config.bold_cairo {FontWeight::Bold} else {FontWeight::Normal});
+        } else if config.font_renderer.to_lowercase() == "freetype" {
+            c.set_font_face(&config.font_face);
+        } else { panic!("Invalid font renderer chosen. Choose between \"Cairo\" and \"FreeType\""); }
         c.set_font_size(32.0);
 
         for i in 0..self.buttons.len() {

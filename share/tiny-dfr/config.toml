@@ -19,6 +19,20 @@ ShowButtonOutlines = true
 # Disabling ShowButtonOutlines will make this effect less noticeable to the eye
 EnablePixelShift = false
 
+# Set this to choose the font renderer.
+# You can choose between "cairo" and "freetype"
+FontRenderer = "freetype"
+
+# Cairo font renderer settings:
+
+# Set FontStyle to the name of the font to be used for cairo as a renderer
+# Set Bold/Italic to true to enable this formatting
+FontStyle = "sans-serif"
+Bold = true
+Italic = false
+
+# FreeType font renderer settings:
+
 # Set this to the fontconfig pattern to be used to pick a font for text labels
 # Some examples are:
 # "" - default regular sans-serif font
