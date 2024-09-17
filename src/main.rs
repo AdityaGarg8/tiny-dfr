@@ -66,6 +66,7 @@ struct Button {
     changed: bool,
     active: bool,
     action: Key,
+    background: bool
 }
 
 fn load_image(icon_name: &str, mode: Option<String>, path: &str) -> Result<ButtonImage> {
@@ -166,17 +167,41 @@ fn try_load_png_path(icon_name: &str, path: &str) -> Result<ButtonImage> {
 
 impl Button {
     fn with_config(cfg: ButtonConfig) -> Button {
+        let background;
         if let Some(text) = cfg.text {
-            Button::new_text(text, cfg.action)
+            if let Some(bg) = cfg.background {
+                background = bg;
+            } else {
+                background = true;
+            }
+            Button::new_text(text, cfg.action, background)
         } else if let Some(icon) = cfg.icon {
             let path = match cfg.path {
                 Some(p) => p,
                 None => "use_default".to_string()
             };
-            Button::new_icon(&icon, cfg.action, cfg.mode, &path)
+            if let Some(bg) = cfg.background {
+                background = bg;
+            } else {
+                if let Some(ref mode) = cfg.mode {
+                    if mode.to_lowercase() == "app" {
+                        background = false;
+                    } else {
+                        background = true;
+                    }
+                } else {
+                    panic!("Invalid config, a button must have either Text, Icon or be Blank")
+                }
+            }
+            Button::new_icon(&icon, cfg.action, cfg.mode, &path, background)
         } else if let Some(mode) = cfg.mode {
+            if let Some(bg) = cfg.background {
+                background = bg;
+            } else {
+                background = false;
+            }
             if mode.to_lowercase() == "blank" {
-                Button::new_blank(cfg.action)
+                Button::new_blank(cfg.action, background)
             } else if mode.to_lowercase() == "time" {
                 let format = match cfg.format {
                     Some(f) => f,
@@ -186,7 +211,7 @@ impl Button {
                     Some(l) => l,
                     None => "POSIX".to_string()
                 };
-                Button::new_time(cfg.action, format, locale)
+                Button::new_time(cfg.action, format, locale, background)
             } else {
                 panic!("Invalid config, a button must have either Text, Icon or be Blank")
             }
@@ -194,15 +219,16 @@ impl Button {
             panic!("Invalid config, a button must have either Text, Icon or be Blank")
         }
     }
-    fn new_text(text: String, action: Key) -> Button {
+    fn new_text(text: String, action: Key, background: bool) -> Button {
         Button {
             action,
             active: false,
             changed: false,
             image: ButtonImage::Text(text),
+            background
         }
     }
-    fn new_icon(icon_name: &str, action: Key, mode: Option<String>, path: &str) -> Button {
+    fn new_icon(icon_name: &str, action: Key, mode: Option<String>, path: &str, background: bool) -> Button {
         let image = load_image(icon_name, mode, path)
             .or_else(|_| try_load_svg_path(icon_name, path))
             .or_else(|_| try_load_png_path(icon_name, path))
@@ -211,22 +237,25 @@ impl Button {
             action, image,
             active: false,
             changed: false,
+            background
         }
     }
-    fn new_time(action: Key, format: String, locale: String) -> Button {
+    fn new_time(action: Key, format: String, locale: String, background: bool) -> Button {
         Button {
             action,
             active: false,
             changed: false,
             image: ButtonImage::Time(format, locale),
+            background
         }
     }
-    fn new_blank(action: Key) -> Button {
+    fn new_blank(action: Key, background: bool) -> Button {
         Button {
             action,
             active: false,
             changed: false,
             image: ButtonImage::Blank,
+            background
         }
     }
     fn render(&self, c: &Context, height: i32, button_left_edge: f64, button_width: u64, y_shift: f64) {
@@ -389,14 +418,7 @@ impl FunctionLayer {
                button.action != Key::Macro2 &&
                button.action != Key::Macro3 &&
                button.action != Key::Macro4) &&
-               ((button.action != Key::WWW &&
-                button.action != Key::AllApplications &&
-                button.action != Key::Calc &&
-                button.action != Key::File &&
-                button.action != Key::Prog1 &&
-                button.action != Key::Prog2 &&
-                button.action != Key::Prog3 &&
-                button.action != Key::Prog4) ||
+               ((button.background) ||
                 button.active) {
 
                 c.set_source_rgb(color, color, color);
