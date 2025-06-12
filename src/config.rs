@@ -1,5 +1,8 @@
-use crate::fonts::{FontConfig, Pattern};
-use crate::FunctionLayer;
+use crate::{
+    fonts::{FontConfig, Pattern},
+    FunctionLayer,
+    HashMap
+};
 use anyhow::Error;
 use cairo::FontFace;
 use freetype::Library as FtLibrary;
@@ -12,6 +15,9 @@ use serde::Deserialize;
 use std::{fs::read_to_string, os::fd::AsFd};
 
 const USER_CFG_PATH: &str = "/etc/tiny-dfr/config.toml";
+const BATTERY_STATUS: &str = "/sys/class/power_supply/BAT0/status";
+const BATTERY_CAPACITY: &str = "/sys/class/power_supply/BAT0/capacity";
+const BATTERY_CHARGE_NOW: &str = "/sys/class/power_supply/BAT0/charge_now";
 
 pub struct Config {
     pub show_button_outlines: bool,
@@ -118,58 +124,69 @@ fn load_config(width: u16) -> (Config, [FunctionLayer; 2]) {
 
 pub struct ConfigManager {
     inotify_fd: Inotify,
-    watch_desc: Option<WatchDescriptor>,
+    watch_descs: HashMap<&'static str, WatchDescriptor>,
 }
 
-fn arm_inotify(inotify_fd: &Inotify) -> Option<WatchDescriptor> {
+fn arm_inotify(inotify_fd: &Inotify) -> HashMap<&'static str, WatchDescriptor> {
+    let mut descs = HashMap::new();
     let flags = AddWatchFlags::IN_MOVED_TO | AddWatchFlags::IN_CLOSE | AddWatchFlags::IN_ONESHOT;
-    match inotify_fd.add_watch(USER_CFG_PATH, flags) {
-        Ok(wd) => Some(wd),
-        Err(Errno::ENOENT) => None,
-        e => Some(e.unwrap()),
+
+    for path in [USER_CFG_PATH, BATTERY_STATUS, BATTERY_CAPACITY, BATTERY_CHARGE_NOW] {
+        if let Ok(wd) = inotify_fd.add_watch(path, flags) {
+            descs.insert(path, wd);
+        }
     }
+
+    descs
 }
 
 impl ConfigManager {
     pub fn new() -> ConfigManager {
         let inotify_fd = Inotify::init(InitFlags::IN_NONBLOCK).unwrap();
-        let watch_desc = arm_inotify(&inotify_fd);
+        let watch_descs = arm_inotify(&inotify_fd);
         ConfigManager {
             inotify_fd,
-            watch_desc,
+            watch_descs,
         }
     }
+
     pub fn load_config(&self, width: u16) -> (Config, [FunctionLayer; 2]) {
         load_config(width)
     }
+
     pub fn update_config(
         &mut self,
         cfg: &mut Config,
         layers: &mut [FunctionLayer; 2],
         width: u16,
     ) -> bool {
-        if self.watch_desc.is_none() {
-            self.watch_desc = arm_inotify(&self.inotify_fd);
+        if self.watch_descs.is_empty() {
+            self.watch_descs = arm_inotify(&self.inotify_fd);
             return false;
         }
+
         let evts = match self.inotify_fd.read_events() {
             Ok(e) => e,
             Err(Errno::EAGAIN) => Vec::new(),
             r => r.unwrap(),
         };
+
         let mut ret = false;
+
         for evt in evts {
-            if evt.wd != self.watch_desc.unwrap() {
-                continue;
+            if self.watch_descs.values().any(|wd| *wd == evt.wd) {
+                let parts = load_config(width);
+                *cfg = parts.0;
+                *layers = parts.1;
+                ret = true;
+                self.watch_descs = arm_inotify(&self.inotify_fd);
+                break;
             }
-            let parts = load_config(width);
-            *cfg = parts.0;
-            *layers = parts.1;
-            ret = true;
-            self.watch_desc = arm_inotify(&self.inotify_fd);
         }
+
         ret
     }
+
     pub fn fd(&self) -> &impl AsFd {
         &self.inotify_fd
     }
